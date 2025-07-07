@@ -1,0 +1,47 @@
+{
+	"version": 3,
+	"cmakeMinimumRequired": {
+		"major": 3,
+		"minor": 21,
+		"patch": 0
+	},
+	"configurePresets": [
+		{
+			"name": "clangd-dev",
+			"displayName": "Clangd Dev",
+			"description": "Build only clangd and minimal LLVM components",
+			"generator": "Ninja",
+			"binaryDir": "${workspaceFolder}/llvm-project/.build-clangd",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"LLVM_ENABLE_PROJECTS": "clang;clang-tools-extra",
+				"LLVM_TARGETS_TO_BUILD": "AArch64",
+				"LLVM_BUILD_TOOLS": "ON",
+				"LLVM_BUILD_UTILS": "OFF",
+				"LLVM_INCLUDE_TESTS": "OFF",
+				"LLVM_INCLUDE_EXAMPLES": "OFF",
+				"LLVM_INCLUDE_BENCHMARKS": "OFF",
+				"CLANGD_BUILD_XPC": "OFF",
+				"CLANGD_ENABLE_REMOTE": "OFF",
+				"CLANG_BUILD_TOOLS": "OFF",
+				"CLANG_INCLUDE_TESTS": "OFF",
+				"CLANG_ENABLE_STATIC_ANALYZER": "OFF",
+				"CLANG_ENABLE_ARCMT": "OFF",
+				"CLANG_ENABLE_OBJC_REWRITER": "OFF",
+				"BUILD_SHARED_LIBS": "ON"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "build-clangd",
+			"displayName": "Build Clangd",
+			"configurePreset": "clangd-dev",
+			"targets": [
+				"clangd"
+			],
+			"condition": true
+		}
+	]
+}
