@@ -79,7 +79,9 @@ needsLeadingEscape(char C, llvm::StringRef Before, llvm::StringRef After, bool S
 	{
 		if (!StartsLine || !Before.empty())
 			return false;
+
 		llvm::StringRef A = After.rtrim();
+
 		return llvm::all_of(A, [C](char D) { return C == D; }) ? 1 + A.size() : 0;
 	};
 
@@ -112,6 +114,7 @@ needsLeadingEscape(char C, llvm::StringRef Before, llvm::StringRef After, bool S
 		{ // ATX heading.
 			if (!StartsLine || !Before.empty())
 				return false;
+
 			llvm::StringRef Rest = After.ltrim(C);
 			return Rest.empty() || Rest.starts_with(" ");
 		}
@@ -260,19 +263,11 @@ renderBlocks(llvm::ArrayRef<std::unique_ptr<Block>> Children, void (Block::*Rend
 	std::string R;
 	llvm::raw_string_ostream OS(R);
 
-	// Trim rulers.
-	Children  = Children.drop_while([](const std::unique_ptr<Block>& C) { return C->isRuler(); });
-	auto Last = llvm::find_if(llvm::reverse(Children), [](const std::unique_ptr<Block>& C) { return !C->isRuler(); });
-	Children  = Children.drop_back(Children.end() - Last.base());
+	/* Originally, clangd was trimming consecutive rulers but we remove that since we can make the appearance
+		of a thicker ruler by piling them on top of each other. */
 
-	bool LastBlockWasRuler = true;
 	for (const auto& C : Children)
-	{
-		if (C->isRuler() && LastBlockWasRuler)
-			continue;
-		LastBlockWasRuler = C->isRuler();
 		((*C).*RenderFunc)(OS);
-	}
 
 	// Get rid of redundant empty lines introduced in plaintext while imitating
 	// padding in markdown.
@@ -419,6 +414,10 @@ Paragraph::renderMarkdown(llvm::raw_ostream& OS) const
 
 		switch (C.Kind)
 		{
+			case Chunk::Markdown:
+				OS << C.Contents;
+				break;
+
 			case Chunk::PlainText:
 				OS << renderText(C.Contents, !HasChunks);
 				break;
@@ -505,6 +504,21 @@ Paragraph::appendSpace()
 {
 	if (!Chunks.empty())
 		Chunks.back().SpaceAfter = true;
+	return *this;
+}
+
+Paragraph&
+Paragraph::appendMarkdown(llvm::StringRef Markdown)
+{
+	std::string Norm = canonicalizeSpaces(Markdown);
+	if (Norm.empty())
+		return *this;
+	Chunks.emplace_back();
+	Chunk& C	  = Chunks.back();
+	C.Contents	  = std::move(Norm);
+	C.Kind		  = Chunk::Markdown;
+	C.SpaceBefore = llvm::isSpace(Markdown.front());
+	C.SpaceAfter  = llvm::isSpace(Markdown.back());
 	return *this;
 }
 

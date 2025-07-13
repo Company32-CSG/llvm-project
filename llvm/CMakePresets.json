@@ -35,6 +35,15 @@
 	],
 	"buildPresets": [
 		{
+			"name": "build-all",
+			"displayName": "Build All",
+			"configurePreset": "clangd-dev",
+			"targets": [
+				"all"
+			],
+			"condition": true
+		},
+		{
 			"name": "build-clangd",
 			"displayName": "Build Clangd",
 			"configurePreset": "clangd-dev",

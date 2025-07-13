@@ -466,27 +466,26 @@ ClangdServer::codeComplete(PathRef File, Position Pos, const clangd::CodeComplet
 			ParseInput.Contents.append("\n");
 		ParseInput.Index = Index;
 
-    CodeCompleteOpts.MainFileSignals = IP->Signals;
-    CodeCompleteOpts.AllScopes = Config::current().Completion.AllScopes;
-    CodeCompleteOpts.ArgumentLists = Config::current().Completion.ArgumentLists;
-    // FIXME(ibiryukov): even if Preamble is non-null, we may want to check
-    // both the old and the new version in case only one of them matches.
-    CodeCompleteResult Result = clangd::codeComplete(
-        File, Pos, IP->Preamble, ParseInput, CodeCompleteOpts,
-        SpecFuzzyFind ? &*SpecFuzzyFind : nullptr);
-    {
-      clang::clangd::trace::Span Tracer("Completion results callback");
-      CB(std::move(Result));
-    }
-    if (SpecFuzzyFind && SpecFuzzyFind->NewReq) {
-      std::lock_guard<std::mutex> Lock(CachedCompletionFuzzyFindRequestMutex);
-      CachedCompletionFuzzyFindRequestByFile[File] = *SpecFuzzyFind->NewReq;
-    }
-    // SpecFuzzyFind is only destroyed after speculative fuzzy find finishes.
-    // We don't want `codeComplete` to wait for the async call if it doesn't use
-    // the result (e.g. non-index completion, speculation fails), so that `CB`
-    // is called as soon as results are available.
-  };
+		CodeCompleteOpts.MainFileSignals = IP->Signals;
+		CodeCompleteOpts.AllScopes		 = Config::current().Completion.AllScopes;
+		CodeCompleteOpts.ArgumentLists	 = Config::current().Completion.ArgumentLists;
+		// FIXME(ibiryukov): even if Preamble is non-null, we may want to check
+		// both the old and the new version in case only one of them matches.
+		CodeCompleteResult Result = clangd::codeComplete(File, Pos, IP->Preamble, ParseInput, CodeCompleteOpts, SpecFuzzyFind ? &*SpecFuzzyFind : nullptr);
+		{
+			clang::clangd::trace::Span Tracer("Completion results callback");
+			CB(std::move(Result));
+		}
+		if (SpecFuzzyFind && SpecFuzzyFind->NewReq)
+		{
+			std::lock_guard<std::mutex> Lock(CachedCompletionFuzzyFindRequestMutex);
+			CachedCompletionFuzzyFindRequestByFile[File] = *SpecFuzzyFind->NewReq;
+		}
+		// SpecFuzzyFind is only destroyed after speculative fuzzy find finishes.
+		// We don't want `codeComplete` to wait for the async call if it doesn't use
+		// the result (e.g. non-index completion, speculation fails), so that `CB`
+		// is called as soon as results are available.
+	};
 
 	// We use a potentially-stale preamble because latency is critical here.
 	WorkScheduler->runWithPreamble("CodeComplete", File, (Opts.RunParser == CodeCompleteOptions::AlwaysParse) ? TUScheduler::Stale : TUScheduler::StaleOrAbsent, std::move(Task));
@@ -518,35 +517,36 @@ ClangdServer::signatureHelp(PathRef File, Position Pos, MarkupKind Documentation
 	WorkScheduler->runWithPreamble("SignatureHelp", File, TUScheduler::Stale, std::move(Action));
 }
 
-void ClangdServer::formatFile(PathRef File, std::optional<Range> Rng,
-                              Callback<tooling::Replacements> CB) {
-  auto Code = getDraft(File);
-  if (!Code)
-    return CB(llvm::make_error<LSPError>("trying to format non-added document",
-                                         ErrorCode::InvalidParams));
-  tooling::Range RequestedRange;
-  if (Rng) {
-    llvm::Expected<size_t> Begin = positionToOffset(*Code, Rng->start);
-    if (!Begin)
-      return CB(Begin.takeError());
-    llvm::Expected<size_t> End = positionToOffset(*Code, Rng->end);
-    if (!End)
-      return CB(End.takeError());
-    RequestedRange = tooling::Range(*Begin, *End - *Begin);
-  } else {
-    RequestedRange = tooling::Range(0, Code->size());
-  }
+void
+ClangdServer::formatFile(PathRef File, std::optional<Range> Rng, Callback<tooling::Replacements> CB)
+{
+	auto Code = getDraft(File);
+	if (!Code)
+		return CB(llvm::make_error<LSPError>("trying to format non-added document", ErrorCode::InvalidParams));
+	tooling::Range RequestedRange;
+	if (Rng)
+	{
+		llvm::Expected<size_t> Begin = positionToOffset(*Code, Rng->start);
+		if (!Begin)
+			return CB(Begin.takeError());
+		llvm::Expected<size_t> End = positionToOffset(*Code, Rng->end);
+		if (!End)
+			return CB(End.takeError());
+		RequestedRange = tooling::Range(*Begin, *End - *Begin);
+	}
+	else
+	{
+		RequestedRange = tooling::Range(0, Code->size());
+	}
 
-  // Call clang-format.
-  auto Action = [File = File.str(), Code = std::move(*Code),
-                 Ranges = std::vector<tooling::Range>{RequestedRange},
-                 CB = std::move(CB), this]() mutable {
-    format::FormatStyle Style = getFormatStyleForFile(File, Code, TFS, true);
-    tooling::Replacements IncludeReplaces =
-        format::sortIncludes(Style, Code, Ranges, File);
-    auto Changed = tooling::applyAllReplacements(Code, IncludeReplaces);
-    if (!Changed)
-      return CB(Changed.takeError());
+	// Call clang-format.
+	auto Action = [File = File.str(), Code = std::move(*Code), Ranges = std::vector<tooling::Range>{ RequestedRange }, CB = std::move(CB), this]() mutable
+	{
+		format::FormatStyle Style			  = getFormatStyleForFile(File, Code, TFS, true);
+		tooling::Replacements IncludeReplaces = format::sortIncludes(Style, Code, Ranges, File);
+		auto Changed						  = tooling::applyAllReplacements(Code, IncludeReplaces);
+		if (!Changed)
+			return CB(Changed.takeError());
 
 		CB(IncludeReplaces.merge(format::reformat(Style, *Changed, tooling::calculateRangesAfterReplacements(IncludeReplaces, Ranges), File)));
 	};

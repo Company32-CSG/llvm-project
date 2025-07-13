@@ -65,6 +65,8 @@ struct HoverInfo
 	/// - LocalScope: Foo::getFoo::
 	/// - Name: Bar
 
+	format::FormatStyle Style;
+
 	/// Scopes might be None in cases where they don't make sense, e.g.
 	/// macros and auto/decltype. Contains all of the enclosing
 	/// namespaces, empty string means global namespace.
