@@ -56,7 +56,6 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <optional>
@@ -1455,12 +1454,10 @@ maybeAddUsedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc)
 				UsedSymbols.insert(Ref.Target);
 		});
 
-  for (const auto &UsedSymbolDecl : UsedSymbols)
-    HI.UsedSymbolNames.push_back(getSymbolName(UsedSymbolDecl));
-  llvm::sort(HI.UsedSymbolNames);
-  HI.UsedSymbolNames.erase(
-      std::unique(HI.UsedSymbolNames.begin(), HI.UsedSymbolNames.end()),
-      HI.UsedSymbolNames.end());
+	for (const auto& UsedSymbolDecl : UsedSymbols)
+		HI.UsedSymbolNames.push_back(getSymbolName(UsedSymbolDecl));
+	llvm::sort(HI.UsedSymbolNames);
+	HI.UsedSymbolNames.erase(std::unique(HI.UsedSymbolNames.begin(), HI.UsedSymbolNames.end()), HI.UsedSymbolNames.end());
 }
 
 } // namespace
@@ -1498,7 +1495,8 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 
 		HoverInfo info;
 
-		info.Name = std::string(llvm::sys::path::filename(include.Resolved));
+		info.Style = Style;
+		info.Name  = std::string(llvm::sys::path::filename(include.Resolved));
 
 		// FIXME: We don't have a fitting value for Kind.
 		info.Definition			= URIForFile::canonicalize(include.Resolved, AST.tuPath()).file().str();
@@ -1618,14 +1616,15 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 		return std::nullopt;
 
 	// Reformat Definition
-	if (!hoverInfo->Definition.empty())
-	{
-		auto Replacements = format::reformat(Style, hoverInfo->Definition, tooling::Range(0, hoverInfo->Definition.size()));
+	// if (!hoverInfo->Definition.empty())
+	// {
+	// 	auto Replacements = format::reformat(Style, hoverInfo->Definition, tooling::Range(0, hoverInfo->Definition.size()));
 
-		if (auto Formatted = tooling::applyAllReplacements(hoverInfo->Definition, Replacements))
-			hoverInfo->Definition = *Formatted;
-	}
+	// 	if (auto Formatted = tooling::applyAllReplacements(hoverInfo->Definition, Replacements))
+	// 		hoverInfo->Definition = *Formatted;
+	// }
 
+	hoverInfo->Style			  = Style;
 	hoverInfo->DefinitionLanguage = getMarkdownLanguage(AST.getASTContext());
 	hoverInfo->SymRange			  = halfOpenToRange(srcMgr, highlightRange);
 
@@ -1793,14 +1792,6 @@ HoverInfo::present() const
 	return Output;
 }
 
-static std::string
-canonicalizeSpaces(llvm::StringRef Input)
-{
-	llvm::SmallVector<llvm::StringRef> Words;
-	llvm::SplitString(Input, Words);
-	return llvm::join(Words, " ");
-}
-
 markup::Document
 HoverInfo::presentForVscode() const
 {
@@ -1808,25 +1799,38 @@ HoverInfo::presentForVscode() const
 
 	if (!Definition.empty())
 	{
-		// std::string buffer = canonicalizeSpaces(Definition);
-
 		output.addCodeBlock(Definition, DefinitionLanguage);
 	}
 
 	if (!Provider.empty())
 	{
-		output.addRuler();
-
-		markup::Paragraph& paragraph = output.addParagraph();
-
-		paragraph.appendText("provided by");
-		paragraph.appendSpace();
-		paragraph.appendCode(Provider);
+		output.addParagraph().appendMarkdown("> _Provided by:_ __`" + Provider + "`__");
+		output.addParagraph();
 	}
 
 	if (!Documentation.empty())
 	{
 		c32::parseDoxygenTags(this, Documentation, output);
+	}
+
+	if (!UsedSymbolNames.empty())
+	{
+		output.addRuler();
+
+		markup::Paragraph& P = output.addParagraph();
+
+		P.appendText("provides ");
+
+		const std::vector<std::string>::size_type SymbolNamesLimit = 5;
+		auto Front												   = llvm::ArrayRef(UsedSymbolNames).take_front(SymbolNamesLimit);
+
+		llvm::interleave(Front, [&](llvm::StringRef Sym) { P.appendCode(Sym); }, [&] { P.appendText(", "); });
+		if (UsedSymbolNames.size() > Front.size())
+		{
+			P.appendText(" and ");
+			P.appendText(std::to_string(UsedSymbolNames.size() - Front.size()));
+			P.appendText(" more");
+		}
 	}
 
 	return output;

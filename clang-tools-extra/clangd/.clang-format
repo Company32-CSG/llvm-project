@@ -1,0 +1,50 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+
+---
+Language: Cpp
+# Force pointers to the type for C++.
+DerivePointerAlignment: false
+UseTab: Always
+TabWidth: 4
+AccessModifierOffset: -4
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  IndentBraces: false
+  BeforeLambdaBody: true
+BreakConstructorInitializers: BeforeColon
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakAfterDefinitionReturnType: All
+AlwaysBreakAfterReturnType: None
+BinPackArguments: false
+BinPackParameters: OnePerLine
+ColumnLimit: 220
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+Cpp11BracedListStyle: false
+NamespaceIndentation: None
+IndentCaseLabels: true
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignAfterOpenBracket: DontAlign
+AlignOperands: false
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceBeforeAssignmentOperators: true
+KeepEmptyLinesAtTheStartOfBlocks: true
+---
+

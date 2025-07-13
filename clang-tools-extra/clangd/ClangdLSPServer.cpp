@@ -20,6 +20,7 @@
 #include "SourceCode.h"
 #include "TUScheduler.h"
 #include "URI.h"
+#include "c32-doxygen/Doxygen.hpp"
 #include "refactor/Tweak.h"
 #include "support/Cancellation.h"
 #include "support/Context.h"
@@ -547,30 +548,16 @@ void
 ClangdLSPServer::onInitialize(const InitializeParams& Params, Callback<llvm::json::Value> Reply)
 {
 	// Determine character encoding first as it affects constructed ClangdServer.
-	if (Params.capabilities.PositionEncodings && !Opts.Encoding)
+	if (Params.capabilities.offsetEncoding && !Opts.Encoding)
 	{
 		Opts.Encoding = OffsetEncoding::UTF16; // fallback
-
-		for (OffsetEncoding Supported : *Params.capabilities.PositionEncodings)
-		{
+		for (OffsetEncoding Supported : *Params.capabilities.offsetEncoding)
 			if (Supported != OffsetEncoding::UnsupportedEncoding)
 			{
 				Opts.Encoding = Supported;
 				break;
 			}
-		}
 	}
-void ClangdLSPServer::onInitialize(const InitializeParams &Params,
-                                   Callback<llvm::json::Value> Reply) {
-  // Determine character encoding first as it affects constructed ClangdServer.
-  if (Params.capabilities.offsetEncoding && !Opts.Encoding) {
-    Opts.Encoding = OffsetEncoding::UTF16; // fallback
-    for (OffsetEncoding Supported : *Params.capabilities.offsetEncoding)
-      if (Supported != OffsetEncoding::UnsupportedEncoding) {
-        Opts.Encoding = Supported;
-        break;
-      }
-  }
 
 	if (Params.capabilities.TheiaSemanticHighlighting && !Params.capabilities.SemanticTokens)
 	{
@@ -675,10 +662,7 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
 				{ "save", true },
 			} },
 		{ "documentFormattingProvider", true },
-		{ "documentRangeFormattingProvider",
-			llvm::json::Object{
-				{ "rangesSupport", true },
-			} },
+		{ "documentRangeFormattingProvider", true },
 		{ "documentOnTypeFormattingProvider",
 			llvm::json::Object{
 				{ "firstTriggerCharacter", "\n" },
@@ -692,8 +676,11 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
 				// Hopefully we can use them one day without this side-effect:
 				//     https://github.com/microsoft/vscode/issues/42544
 				{ "resolveProvider", false },
+
 				// We do extra checks, e.g. that > is part of ->.
-				{ "triggerCharacters", { ".", "<", ">", ":", "\"", "/", "*" } },
+
+				// C32 - Added '@' and '\\' for auto complete in comments
+				{ "triggerCharacters", { ".", "<", ">", ":", "\"", "/", "*", "@", "\\" } },
 			} },
 		{ "semanticTokensProvider",
 			llvm::json::Object{
@@ -734,72 +721,6 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
 		{ "inlayHintProvider", true },
 		{ "foldingRangeProvider", true },
 	};
-  llvm::json::Object ServerCaps{
-      {"textDocumentSync",
-       llvm::json::Object{
-           {"openClose", true},
-           {"change", (int)TextDocumentSyncKind::Incremental},
-           {"save", true},
-       }},
-      {"documentFormattingProvider", true},
-      {"documentRangeFormattingProvider", true},
-      {"documentOnTypeFormattingProvider",
-       llvm::json::Object{
-           {"firstTriggerCharacter", "\n"},
-           {"moreTriggerCharacter", {}},
-       }},
-      {"completionProvider",
-       llvm::json::Object{
-           // We don't set `(` etc as allCommitCharacters as they interact
-           // poorly with snippet results.
-           // See https://github.com/clangd/vscode-clangd/issues/357
-           // Hopefully we can use them one day without this side-effect:
-           //     https://github.com/microsoft/vscode/issues/42544
-           {"resolveProvider", false},
-           // We do extra checks, e.g. that > is part of ->.
-           {"triggerCharacters", {".", "<", ">", ":", "\"", "/", "*"}},
-       }},
-      {"semanticTokensProvider",
-       llvm::json::Object{
-           {"full", llvm::json::Object{{"delta", true}}},
-           {"range", false},
-           {"legend",
-            llvm::json::Object{{"tokenTypes", semanticTokenTypes()},
-                               {"tokenModifiers", semanticTokenModifiers()}}},
-       }},
-      {"signatureHelpProvider",
-       llvm::json::Object{
-           {"triggerCharacters", {"(", ")", "{", "}", "<", ">", ","}},
-       }},
-      {"declarationProvider", true},
-      {"definitionProvider", true},
-      {"implementationProvider", true},
-      {"typeDefinitionProvider", true},
-      {"documentHighlightProvider", true},
-      {"documentLinkProvider",
-       llvm::json::Object{
-           {"resolveProvider", false},
-       }},
-      {"hoverProvider", true},
-      {"selectionRangeProvider", true},
-      {"documentSymbolProvider", true},
-      {"workspaceSymbolProvider", true},
-      {"referencesProvider", true},
-      {"astProvider", true}, // clangd extension
-      {"typeHierarchyProvider", true},
-      // Unfortunately our extension made use of the same capability name as the
-      // standard. Advertise this capability to tell clients that implement our
-      // extension we really have support for the standardized one as well.
-      {"standardTypeHierarchyProvider", true}, // clangd extension
-      {"memoryUsageProvider", true},           // clangd extension
-      {"compilationDatabase",                  // clangd extension
-       llvm::json::Object{{"automaticReload", true}}},
-      {"inactiveRegionsProvider", true}, // clangd extension
-      {"callHierarchyProvider", true},
-      {"clangdInlayHintsProvider", true},
-      {"inlayHintProvider", true},
-      {"foldingRangeProvider", true},
-  };
 
 	{
 		LSPBinder Binder(Handlers, *this);
@@ -832,16 +753,11 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
 
 	ServerCaps["executeCommandProvider"] = llvm::json::Object{ { "commands", Commands } };
 
-  llvm::json::Object Result{
-      {{"serverInfo",
-        llvm::json::Object{
-            {"name", "clangd"},
-            {"version", llvm::formatv("{0} {1} {2}", versionString(),
-                                      featureString(), platformString())}}},
-       {"capabilities", std::move(ServerCaps)}}};
-  if (Opts.Encoding)
-    Result["offsetEncoding"] = *Opts.Encoding;
-  Reply(std::move(Result));
+	llvm::json::Object Result{ { { "serverInfo", llvm::json::Object{ { "name", "clangd" }, { "version", llvm::formatv("{0} {1} {2}", versionString(), featureString(), platformString()) } } },
+		{ "capabilities", std::move(ServerCaps) } } };
+	if (Opts.Encoding)
+		Result["offsetEncoding"] = *Opts.Encoding;
+	Reply(std::move(Result));
 
 	// Apply settings after we're fully initialized.
 	// This can start background indexing and in turn trigger LSP notifications.
@@ -1118,35 +1034,36 @@ ClangdLSPServer::onDocumentOnTypeFormatting(const DocumentOnTypeFormattingParams
 	Server->formatOnType(File, Params.position, Params.ch, std::move(Reply));
 }
 
-void ClangdLSPServer::onDocumentRangeFormatting(
-    const DocumentRangeFormattingParams &Params,
-    Callback<std::vector<TextEdit>> Reply) {
-  auto File = Params.textDocument.uri.file();
-  auto Code = Server->getDraft(File);
-  Server->formatFile(File, Params.range,
-                     [Code = std::move(Code), Reply = std::move(Reply)](
-                         llvm::Expected<tooling::Replacements> Result) mutable {
-                       if (Result)
-                         Reply(replacementsToEdits(*Code, Result.get()));
-                       else
-                         Reply(Result.takeError());
-                     });
+void
+ClangdLSPServer::onDocumentRangeFormatting(const DocumentRangeFormattingParams& Params, Callback<std::vector<TextEdit>> Reply)
+{
+	auto File = Params.textDocument.uri.file();
+	auto Code = Server->getDraft(File);
+	Server->formatFile(File,
+		Params.range,
+		[Code = std::move(Code), Reply = std::move(Reply)](llvm::Expected<tooling::Replacements> Result) mutable
+		{
+			if (Result)
+				Reply(replacementsToEdits(*Code, Result.get()));
+			else
+				Reply(Result.takeError());
+		});
 }
 
-void ClangdLSPServer::onDocumentFormatting(
-    const DocumentFormattingParams &Params,
-    Callback<std::vector<TextEdit>> Reply) {
-  auto File = Params.textDocument.uri.file();
-  auto Code = Server->getDraft(File);
-  Server->formatFile(File,
-                     /*Rng=*/std::nullopt,
-                     [Code = std::move(Code), Reply = std::move(Reply)](
-                         llvm::Expected<tooling::Replacements> Result) mutable {
-                       if (Result)
-                         Reply(replacementsToEdits(*Code, Result.get()));
-                       else
-                         Reply(Result.takeError());
-                     });
+void
+ClangdLSPServer::onDocumentFormatting(const DocumentFormattingParams& Params, Callback<std::vector<TextEdit>> Reply)
+{
+	auto File = Params.textDocument.uri.file();
+	auto Code = Server->getDraft(File);
+	Server->formatFile(File,
+		/*Rng=*/std::nullopt,
+		[Code = std::move(Code), Reply = std::move(Reply)](llvm::Expected<tooling::Replacements> Result) mutable
+		{
+			if (Result)
+				Reply(replacementsToEdits(*Code, Result.get()));
+			else
+				Reply(Result.takeError());
+		});
 }
 
 /// The functions constructs a flattened view of the DocumentSymbol hierarchy.
@@ -1309,9 +1226,12 @@ ClangdLSPServer::onCompletion(const CompletionParams& Params, Callback<Completio
 		vlog("ignored auto-triggered completion, preceding char did not match");
 		return Reply(CompletionList());
 	}
+
 	auto Opts = this->Opts.CodeComplete;
+
 	if (Params.limit && *Params.limit >= 0)
 		Opts.Limit = *Params.limit;
+
 	Server->codeComplete(Params.textDocument.uri.file(),
 		Params.position,
 		Opts,
@@ -1319,16 +1239,22 @@ ClangdLSPServer::onCompletion(const CompletionParams& Params, Callback<Completio
 		{
 			if (!List)
 				return Reply(List.takeError());
+
 			CompletionList LSPList;
+
 			LSPList.isIncomplete = List->HasMore;
+
 			for (const auto& R : List->Completions)
 			{
 				CompletionItem C = R.render(Opts);
 				C.kind			 = adjustKindToCapability(C.kind, SupportedCompletionItemKinds);
+
 				if (!SupportsCompletionLabelDetails)
 					removeCompletionLabelDetails(C);
+
 				LSPList.items.push_back(std::move(C));
 			}
+
 			return Reply(std::move(LSPList));
 		});
 }
@@ -2000,17 +1926,24 @@ ClangdLSPServer::shouldRunCompletion(const CompletionParams& Params) const
 {
 	if (Params.context.triggerKind != CompletionTriggerKind::TriggerCharacter)
 		return true;
+
 	auto Code = Server->getDraft(Params.textDocument.uri.file());
 	if (!Code)
 		return true; // completion code will log the error for untracked doc.
-	auto Offset = positionToOffset(*Code,
-		Params.position,
-		/*AllowColumnsBeyondLineLength=*/false);
+
+	auto Offset = positionToOffset(*Code, Params.position, /*AllowColumnsBeyondLineLength=*/false);
 	if (!Offset)
 	{
 		vlog("could not convert position '{0}' to offset for file '{1}'", Params.position, Params.textDocument.uri.file());
 		return true;
 	}
+
+	/* Enable auto complete for Doxygen tag initiators in comments (e.g., '@') */
+	if (c32::doxygen::isDoxygenTagInitiator(Params.context.triggerCharacter))
+	{
+		return c32::doxygen::inDoxygenComment(*Code, *Offset);
+	}
+
 	return allowImplicitCompletion(*Code, *Offset);
 }
 

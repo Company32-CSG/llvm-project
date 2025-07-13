@@ -45,6 +45,14 @@ operator|(ParamSpecifier lhs, ParamSpecifier rhs)
 	return static_cast<ParamSpecifier>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
 }
 
+inline ParamSpecifier&
+operator|=(ParamSpecifier& lhs, ParamSpecifier rhs)
+{
+	lhs = rhs | lhs;
+
+	return lhs;
+}
+
 /**
  * @brief Logically AND two `ParamSpecifier` enum values together
  *
@@ -68,9 +76,10 @@ enum class DoxygenTag
 {
 	NoTag,
 	Generic,
+	Md,
+	Markdown,
 	Brief,
 	Param,
-	Return,
 	Returns,
 	Retval,
 	Result,
@@ -111,11 +120,14 @@ struct DoxygenExampleTag
 struct DoxygenData
 {
 	std::string brief;
+	std::vector<std::string> warnings;
+	std::string deprecation;
 	std::optional<DoxygenExampleTag> example;
-
 	std::vector<DoxygenParamTag> params;
-
+	std::string returns;
+	std::map<std::string, std::string> retvals;
 	std::vector<DoxygenGenericTag> genericTags;
+	std::vector<std::string> rawMarkdown;
 	std::vector<std::string> userLines;
 };
 

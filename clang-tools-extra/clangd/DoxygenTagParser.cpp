@@ -3,46 +3,88 @@
 
 #include "Hover.h"
 #include "support/Markup.h"
-#include "clang/Basic/CharInfo.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringExtras.h"
+#include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/raw_ostream.h"
+
+#include "clang/Format/Format.h"
+#include "llvm/Support/Path.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace clang::clangd::c32 {
 
-/**
- * @brief Consume the first line of the string, advancing `pContent` to the next line.
- *
- * @param pContent[in,out] Reference to the string
- *
- * @return `llvm::StringRef`
- */
+template <typename T>
+static auto
+reversed(T& container)
+{
+	struct ReversedRange
+	{
+		T& container;
+		auto
+		begin()
+		{
+			return container.rbegin();
+		}
+
+		auto
+		end()
+		{
+			return container.rend();
+		}
+	};
+
+	return ReversedRange{ container };
+}
+
+static std::string
+indentLines(std::string& input)
+{
+	// Indent first line
+	std::string result = "\t";
+
+	for (auto c : input)
+	{
+		result += c;
+
+		if ('\n' == c)
+			result += '\t';
+	}
+
+	return result;
+}
+
 static llvm::StringRef consumeLine(llvm::StringRef& pContent);
 static llvm::StringRef peekLine(llvm::StringRef content);
 static bool lineStartsWithTag(llvm::StringRef content);
 
 static DoxygenTag consumeTag(llvm::StringRef& content);
-static std::optional<DoxygenGenericTag> consumeGeneric(llvm::StringRef& content);
-static std::string consumeBrief(llvm::StringRef& content);
+static std::optional<DoxygenGenericTag> consumeGenericTag(llvm::StringRef& content);
+static std::optional<std::string> consumeUntilNextTag(llvm::StringRef& content);
 static DoxygenParamTag consumeParam(llvm::StringRef& content);
+static std::pair<std::string, std::string> consumeRetval(llvm::StringRef& content);
 static std::optional<DoxygenExampleTag> consumeExample(llvm::StringRef& content);
 
 static std::optional<llvm::StringRef> getBacktickQuoteRange(llvm::StringRef Line, size_t Offset);
-static void buildMarkdown(DoxygenData& data, markup::Document& pOutput);
+static void buildMarkdown(const HoverInfo* hoverInfo, DoxygenData& data, markup::Document& pOutput);
 
 static const std::map<DoxygenTag, std::string> SupportedDoxygenTags = {
+	{ DoxygenTag::Md, "md" },
+	{ DoxygenTag::Markdown, "markdown" },
 	{ DoxygenTag::Brief, "brief" },
 	{ DoxygenTag::Param, "param" },
+	{ DoxygenTag::Returns, "returns" },
+	{ DoxygenTag::Retval, "retval" },
+	{ DoxygenTag::Result, "result" },
 	{ DoxygenTag::Example, "example" },
+	{ DoxygenTag::Warning, "warning" },
+	{ DoxygenTag::Deprecated, "deprecated" },
 };
 
 /* **************************************************************** */
@@ -78,7 +120,7 @@ parseDoxygenTags(const HoverInfo* hoverInfo, llvm::StringRef comment, markup::Do
 		{
 			case DoxygenTag::Generic:
 			{
-				auto generic = consumeGeneric(comment);
+				auto generic = consumeGenericTag(comment);
 
 				if (auto& value = generic)
 					data.genericTags.push_back(std::move(*value));
@@ -86,9 +128,23 @@ parseDoxygenTags(const HoverInfo* hoverInfo, llvm::StringRef comment, markup::Do
 				break;
 			}
 
+			case DoxygenTag::Md:
+			case DoxygenTag::Markdown:
+			{
+				auto consumed = consumeUntilNextTag(comment);
+
+				if (auto& value = consumed)
+					data.rawMarkdown.push_back(std::move(*value));
+
+				break;
+			}
+
 			case DoxygenTag::Brief:
 			{
-				data.brief = consumeBrief(comment);
+				auto consumed = consumeUntilNextTag(comment);
+
+				if (auto& value = consumed)
+					data.brief = std::move(*value);
 
 				break;
 			}
@@ -103,9 +159,48 @@ parseDoxygenTags(const HoverInfo* hoverInfo, llvm::StringRef comment, markup::Do
 				break;
 			}
 
+			case DoxygenTag::Returns:
+			{
+				auto consumed = consumeUntilNextTag(comment);
+
+				if (auto& value = consumed)
+					data.returns = std::move(*value);
+
+				break;
+			}
+
+			case DoxygenTag::Retval:
+			case DoxygenTag::Result:
+			{
+				auto [k, v] = consumeRetval(comment);
+
+				data.retvals[k] = v;
+				break;
+			}
+
 			case DoxygenTag::Example:
 			{
 				data.example = consumeExample(comment);
+
+				break;
+			}
+
+			case DoxygenTag::Warning:
+			{
+				auto consumed = consumeUntilNextTag(comment);
+
+				if (auto& value = consumed)
+					data.warnings.push_back(std::move(*value));
+
+				break;
+			}
+
+			case DoxygenTag::Deprecated:
+			{
+				auto consumed = consumeUntilNextTag(comment);
+
+				if (auto& value = consumed)
+					data.deprecation = std::move(*value);
 
 				break;
 			}
@@ -123,7 +218,7 @@ parseDoxygenTags(const HoverInfo* hoverInfo, llvm::StringRef comment, markup::Do
 
 	// MARK: - Build Markdown
 
-	buildMarkdown(data, pOutput);
+	buildMarkdown(hoverInfo, data, pOutput);
 }
 
 static llvm::StringRef
@@ -199,7 +294,7 @@ consumeTag(llvm::StringRef& content)
 }
 
 static std::optional<DoxygenGenericTag>
-consumeGeneric(llvm::StringRef& content)
+consumeGenericTag(llvm::StringRef& content)
 {
 	DoxygenGenericTag result;
 
@@ -250,8 +345,8 @@ consumeGeneric(llvm::StringRef& content)
 	return result;
 }
 
-static std::string
-consumeBrief(llvm::StringRef& content)
+static std::optional<std::string>
+consumeUntilNextTag(llvm::StringRef& content)
 {
 	std::string retval;
 
@@ -270,6 +365,9 @@ consumeBrief(llvm::StringRef& content)
 		retval += consumed.str();
 	}
 
+	if (0U == retval.size())
+		return std::nullopt;
+
 	return retval;
 }
 
@@ -282,6 +380,9 @@ consumeParam(llvm::StringRef& content)
 		defined like '@param[in] name' */
 
 	auto line = consumeLine(content);
+
+	/* Initialize the specifiers to NONE */
+	retval.specifiers = ParamSpecifier::NONE;
 
 	/* Check for specifiers [in], [out], [in:optional,out], etc. */
 	if (line.starts_with("["))
@@ -312,12 +413,12 @@ consumeParam(llvm::StringRef& content)
 				}
 
 				if (direction.equals_insensitive("in"))
-					retval.specifiers = retval.specifiers | ParamSpecifier::IN;
+					retval.specifiers |= ParamSpecifier::IN;
 				else if (direction.equals_insensitive("out"))
-					retval.specifiers = retval.specifiers | ParamSpecifier::OUT;
+					retval.specifiers |= ParamSpecifier::OUT;
 
 				if (qualifier.equals_insensitive("optional"))
-					retval.specifiers = retval.specifiers | ParamSpecifier::OPTIONAL;
+					retval.specifiers |= ParamSpecifier::OPTIONAL;
 			}
 		}
 	}
@@ -354,6 +455,48 @@ consumeParam(llvm::StringRef& content)
 	return retval;
 }
 
+static std::pair<std::string, std::string>
+consumeRetval(llvm::StringRef& content)
+{
+	std::pair<std::string, std::string> ret;
+
+	/* We are passed everything directly after '@retval' which is usually a value and
+		optionally a description. E.g., '@retval ERR_INVALID_ARGS Invalid arguments passed' */
+
+	auto line = consumeLine(content).ltrim();
+
+	/* First token is the name */
+
+	auto space = line.find(' ');
+
+	if (space == llvm::StringRef::npos)
+	{
+		ret.first = line.str();
+	}
+	else
+	{
+		ret.first  = line.substr(0U, space).ltrim().str();
+		ret.second = line.substr(space + 1U).ltrim().str();
+	}
+
+	while (true)
+	{
+		auto nextLine = peekLine(content);
+
+		if (nextLine.empty() || lineStartsWithTag(nextLine))
+			break;
+
+		auto consumed = consumeLine(content);
+
+		if (!consumed.empty())
+		{
+			ret.second += consumed.str();
+		}
+	}
+
+	return ret;
+}
+
 static std::optional<DoxygenExampleTag>
 consumeExample(llvm::StringRef& content)
 {
@@ -382,7 +525,7 @@ consumeExample(llvm::StringRef& content)
 	if (openingBracket == llvm::StringRef::npos)
 		return std::nullopt;
 
-	auto block = content.slice(1U, closingBracket);
+	auto block = content.slice(1U, closingBracket).trim();
 	content	   = content.drop_front(closingBracket + 1U).trim();
 
 	retval.contents = block.str();
@@ -467,29 +610,93 @@ appendTextOrCode(llvm::StringRef content, markup::Paragraph& pOutput)
 	}
 }
 
-static void
-buildMarkdown(DoxygenData& data, markup::Document& pOutput)
+static std::string
+formatCodeBlock(const std::string& contents, const format::FormatStyle& style)
 {
-	/* Append the brief (if present) */
+	tooling::Replacements replacements = reformat(style, contents, { tooling::Range(0, contents.size()) });
+
+	llvm::Expected<std::string> formatted = tooling::applyAllReplacements(contents, replacements);
+
+	if (formatted)
+		return *formatted;
+	else
+		return contents;
+}
+
+static void
+buildMarkdown(const HoverInfo* hoverInfo, DoxygenData& data, markup::Document& pOutput)
+{
+	/* Append the brief */
 	if (!data.brief.empty())
 	{
-		pOutput.addRuler();
-
 		markup::Paragraph& paragraph = pOutput.addParagraph();
 
 		appendTextOrCode(data.brief, paragraph);
 	}
 
+	/* Pile on the rulers to make a thick divider after the brief/signature */
+	pOutput.addRuler();
+	pOutput.addRuler();
+	pOutput.addRuler();
+	pOutput.addRuler();
+
+	/* Append warnings to the top of the hover */
+	if (!data.warnings.empty())
+	{
+		bool bulletList = (data.warnings.size() > 1U);
+
+		pOutput.addHeading(2).appendText("⚠️ Warning");
+
+		for (auto& warning : data.warnings)
+		{
+			markup::Paragraph& paragraph = pOutput.addParagraph();
+
+			if (bulletList)
+			{
+				paragraph.appendMarkdown("-");
+				paragraph.appendSpace();
+			}
+
+			paragraph.appendMarkdown("_" + warning + "_");
+		}
+	}
+
+	/* Append the deprecated warning */
+	if (!data.deprecation.empty())
+	{
+		pOutput.addHeading(3).appendMarkdown("~~Deprecated~~");
+
+		markup::Paragraph& paragraph = pOutput.addParagraph();
+
+		appendTextOrCode(data.deprecation, paragraph);
+	}
+
+	/* Pile on the rulers to make a thick divider after the warnings/deprecation */
+	if (!data.warnings.empty() || !data.deprecation.empty())
+	{
+		pOutput.addRuler();
+		pOutput.addRuler();
+		pOutput.addRuler();
+		pOutput.addRuler();
+	}
+
 	/* Append random non-tagged user lines */
 	if (!data.userLines.empty())
 	{
-		pOutput.addRuler();
-
 		for (auto& line : data.userLines)
 		{
 			markup::Paragraph& paragraph = pOutput.addParagraph();
 
 			appendTextOrCode(line, paragraph);
+		}
+	}
+
+	/* Append random raw markdown lines */
+	if (!data.rawMarkdown.empty())
+	{
+		for (auto& line : data.rawMarkdown)
+		{
+			pOutput.addParagraph().appendMarkdown(line);
 		}
 	}
 
@@ -527,9 +734,9 @@ buildMarkdown(DoxygenData& data, markup::Document& pOutput)
 
 			if (ParamSpecifier::NONE != param.specifiers)
 			{
-				bool in	 = (ParamSpecifier::IN == (param.specifiers & ParamSpecifier::IN));
-				bool out = (ParamSpecifier::OUT == (param.specifiers & ParamSpecifier::OUT));
-				bool opt = (ParamSpecifier::OPTIONAL == (param.specifiers & ParamSpecifier::OPTIONAL));
+				bool in	 = (ParamSpecifier::NONE != (param.specifiers & ParamSpecifier::IN));
+				bool out = (ParamSpecifier::NONE != (param.specifiers & ParamSpecifier::OUT));
+				bool opt = (ParamSpecifier::NONE != (param.specifiers & ParamSpecifier::OPTIONAL));
 
 				if (in && out)
 					paragraph.appendCode(opt ? "⇳" : "↕︎");
@@ -542,7 +749,9 @@ buildMarkdown(DoxygenData& data, markup::Document& pOutput)
 			}
 
 			paragraph.appendCode(param.name);
-			paragraph.appendText(" → ");
+			paragraph.appendSpace();
+			paragraph.appendText("→");
+			paragraph.appendSpace();
 
 			appendTextOrCode(param.desc, paragraph);
 
@@ -550,27 +759,56 @@ buildMarkdown(DoxygenData& data, markup::Document& pOutput)
 		}
 	}
 
-	/* Append example code */
-	if (auto const example = data.example)
+	/* Append the return description (@returns) */
+	if (!data.returns.empty())
 	{
 		pOutput.addRuler();
 
-		pOutput.addHeading(3).appendText("Example");
-		pOutput.addHeading(3).appendText("{");
+		pOutput.addHeading(3).appendText("Returns");
 
-		auto contents = llvm::StringRef((*example).contents).trim();
-		std::string normalized;
+		markup::Paragraph& paragraph = pOutput.addParagraph();
 
-		while (!contents.empty())
+		appendTextOrCode(data.returns, paragraph);
+	}
+
+	/* Append the collected @retval/@result tags */
+	if (!data.retvals.empty())
+	{
+		/* Add the 'Returns' heading if the user didn't specify a @returns tag */
+		if (data.returns.empty())
 		{
-			auto line = consumeLine(contents).trim();
+			pOutput.addRuler();
 
-			normalized += "\t" + line.str() + "\n";
+			pOutput.addHeading(3).appendText("Returns");
 		}
 
-		pOutput.addCodeBlock(normalized, (*example).language);
+		for (const auto& [key, val] : reversed(data.retvals))
+		{
+			markup::Paragraph& paragraph = pOutput.addParagraph();
 
-		pOutput.addHeading(3).appendText("}");
+			paragraph.appendMarkdown("-");
+			paragraph.appendSpace();
+			paragraph.appendMarkdown("__`" + key + "`__");
+			paragraph.appendSpace();
+			paragraph.appendText("→");
+			paragraph.appendSpace();
+
+			appendTextOrCode(val, paragraph);
+		}
+	}
+
+	/* Append example code */
+	if (auto const example = data.example)
+	{
+		auto formatted = formatCodeBlock((*example).contents, (hoverInfo->Style));
+
+		pOutput.addRuler();
+
+		pOutput.addHeading(3).appendText("Example");
+
+		pOutput.addParagraph().appendMarkdown("__{__");
+		pOutput.addCodeBlock(indentLines(formatted), (*example).language);
+		pOutput.addParagraph().appendMarkdown("__}__");
 	}
 
 	pOutput.addParagraph();
