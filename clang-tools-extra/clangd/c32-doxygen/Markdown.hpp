@@ -1,7 +1,9 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_GFM_MARKDOWN_HPP
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_GFM_MARKDOWN_HPP
+#include "Utils.hpp"
 
 #include "llvm/Support/raw_ostream.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -40,6 +42,8 @@ struct Renderer
 	virtual void emitCode(std::string_view s) = 0;
 
 	virtual void emitLink(std::string_view text, std::string_view url) = 0;
+
+	virtual void emitSpace() = 0;
 
 	virtual void emitBlankLine() = 0;
 
@@ -91,15 +95,21 @@ struct MarkdownRenderer : Renderer
 	}
 
 	void
+	emitSpace() override
+	{
+		out << " ";
+	}
+
+	void
 	emitBlankLine() override
 	{
-		out << "\n\n";
+		out << "  \n  \n";
 	}
 
 	void
 	emitNewLine() override
 	{
-		out << "\n";
+		out << "  \n";
 	}
 
 	void
@@ -155,6 +165,12 @@ struct PlaintextRenderer : Renderer
 	}
 
 	void
+	emitSpace() override
+	{
+		out << " ";
+	}
+
+	void
 	emitBlankLine() override
 	{
 		out << "\n\n";
@@ -198,6 +214,7 @@ struct PlaintextRenderer : Renderer
  * 				.bold();
  * }
  */
+template <typename Base>
 struct ChunkContainer
 {
 private:
@@ -205,7 +222,10 @@ private:
 	{
 		Text,
 		Code,
-		Link
+		Link,
+		Space,
+		Newline,
+		Blankline
 	};
 
 	struct Chunk
@@ -219,64 +239,94 @@ private:
 		bool isItalic		 = false;
 		bool isStrikethrough = false;
 
-		Chunk(Kind kind, std::string text, std::string url = "") : kind(kind), text(text), url(url) {}
+		Chunk(Kind kind, std::string text = "", std::string url = "") : kind(kind), text(text), url(url) {}
+
+		inline bool
+		stylable() const
+		{
+			return Kind::Space != kind && Kind::Newline != kind && Kind::Blankline != kind;
+		}
 	};
 
 	std::vector<Chunk> chunks;
 
 public:
-	ChunkContainer&
+	Base&
 	text(std::string s)
 	{
 		chunks.push_back({ Kind::Text, s });
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
-	ChunkContainer&
+	Base&
 	code(std::string s)
 	{
 		chunks.push_back({ Kind::Code, s });
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
-	ChunkContainer&
+	Base&
 	link(std::string text, std::string url)
 	{
 		chunks.push_back({ Kind::Link, text, url });
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
-	ChunkContainer&
+	Base&
+	space()
+	{
+		chunks.push_back({ Kind::Space });
+
+		return static_cast<Base&>(*this);
+	}
+
+	Base&
+	newline()
+	{
+		chunks.push_back({ Kind::Newline });
+
+		return static_cast<Base&>(*this);
+	}
+
+	Base&
+	blankline()
+	{
+		chunks.push_back({ Kind::Blankline });
+
+		return static_cast<Base&>(*this);
+	}
+
+	Base&
 	bold()
 	{
 		assert(!chunks.empty());
 
 		chunks.back().isBold = true;
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
-	ChunkContainer&
+	Base&
 	italic()
 	{
 		assert(!chunks.empty());
 
 		chunks.back().isItalic = true;
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
-	ChunkContainer&
+	Base&
 	strikethrough()
 	{
 		assert(!chunks.empty());
 
 		chunks.back().isStrikethrough = true;
 
-		return *this;
+		return static_cast<Base&>(*this);
 	}
 
 	void
@@ -284,7 +334,9 @@ public:
 	{
 		for (const auto& chunk : chunks)
 		{
-			if (Kind::Code != chunk.kind)
+			auto text = trim(chunk.text);
+
+			if (chunk.stylable())
 			{
 				if (chunk.isBold)
 					r.emitBold();
@@ -299,19 +351,31 @@ public:
 			switch (chunk.kind)
 			{
 				case Kind::Text:
-					r.emitText(chunk.text);
+					r.emitText(text);
 					break;
 
 				case Kind::Code:
-					r.emitCode(chunk.text);
+					r.emitCode(text);
 					break;
 
 				case Kind::Link:
-					r.emitLink(chunk.text, chunk.url);
+					r.emitLink(text, chunk.url);
+					break;
+
+				case Kind::Space:
+					r.emitSpace();
+					break;
+
+				case Kind::Newline:
+					r.emitNewLine();
+					break;
+
+				case Kind::Blankline:
+					r.emitBlankLine();
 					break;
 			}
 
-			if (Kind::Code != chunk.kind)
+			if (chunk.stylable())
 			{
 				if (chunk.isStrikethrough)
 					r.emitStrikethrough();
@@ -350,7 +414,7 @@ struct Block
  *
  * Use `Document::heading()` to create headings.
  */
-class Heading : public Block, public ChunkContainer
+class Heading : public Block, public ChunkContainer<Heading>
 {
 private:
 	unsigned int mLevel;
@@ -367,6 +431,8 @@ public:
 	void
 	render(Renderer& r) const override
 	{
+		r.emitBlankLine();
+
 		/// Emit our ATX heading (#)
 		r.emitHeader(mLevel);
 
@@ -383,11 +449,13 @@ public:
  *
  * Use `Document::paragraph()` to create paragraphs.
  */
-class Paragraph : public Block, public ChunkContainer
+class Paragraph : public Block, public ChunkContainer<Paragraph>
 {
 	void
 	render(Renderer& r) const override
 	{
+		r.emitBlankLine();
+
 		/// Render the chunks for this heading
 		renderChunks(r);
 
@@ -401,41 +469,64 @@ class Paragraph : public Block, public ChunkContainer
  *
  * Use `Document::list()` and `Document::list().item()` to add lists and items.
  */
-class List : public Block
+class List : public Block, public ChunkContainer<List>
 {
 private:
 	std::vector<ChunkContainer> mItems;
 	bool						mOrdered;
+	bool						mCompact;
 
 public:
-	List(bool ordered = false) : mOrdered(ordered) {}
+	List(bool ordered = false) : mOrdered(ordered), mCompact(false) {}
 
 	void
 	render(Renderer& r) const override
 	{
 		size_t index = 1U;
 
-		for (const auto& item : mItems)
+		/// Render any title content
+		renderChunks(r);
+
+		/// Start our list
+		r.emitNewLine();
+
+		if (mCompact && 1U == mItems.size())
 		{
-			if (mOrdered)
-				r.emitText(std::to_string(index++) + ". ");
-			else
-				r.emitText("- ");
+			mItems.front().renderChunks(r);
+		}
+		else
+		{
+			for (const auto& item : mItems)
+			{
+				if (mOrdered)
+					r.emitText(std::to_string(index++) + ". ");
+				else
+					r.emitText("- ");
 
-			item.renderChunks(r);
+				item.renderChunks(r);
 
-			r.emitNewLine();
+				r.emitNewLine();
+			}
 		}
 
+		/// End our list
 		r.emitNewLine();
 	}
 
-	ChunkContainer&
+	List&
 	item()
 	{
 		mItems.emplace_back();
 
-		return mItems.back();
+		return static_cast<List&>(mItems.back());
+	}
+
+	List&
+	compact()
+	{
+		mCompact = true;
+
+		return *this;
 	}
 };
 
@@ -447,8 +538,8 @@ public:
 class Table : public Block
 {
 private:
-	std::vector<std::pair<std::string, Align>> mColumns;
-	std::vector<std::vector<ChunkContainer>>   mRows;
+	std::vector<std::pair<std::string, Align>>		mColumns;
+	std::vector<std::vector<ChunkContainer<Table>>> mRows;
 
 public:
 	Table(std::initializer_list<std::string> columns, Align alignment)
@@ -461,10 +552,10 @@ public:
 
 	Table(std::initializer_list<std::pair<std::string, Align>> columns) : mColumns(columns) {}
 
-	std::vector<ChunkContainer>&
+	std::vector<ChunkContainer<Table>>&
 	row()
 	{
-		std::vector<ChunkContainer> newRow(mColumns.size());
+		std::vector<ChunkContainer<Table>> newRow(mColumns.size());
 
 		mRows.push_back(std::move(newRow));
 
@@ -537,11 +628,25 @@ public:
  */
 class Line : public Block
 {
+private:
+	size_t mThickness;
+
+public:
+	Line(size_t thickness = 1U) : mThickness(thickness) {}
+
 	void
 	render(Renderer& r) const override
 	{
 		r.emitBlankLine();
-		r.emitText("---");
+
+		for (size_t i = 1U; i <= mThickness; i++)
+		{
+			r.emitText("---");
+
+			if (i + 1U < mThickness)
+				r.emitNewLine();
+		}
+
 		r.emitBlankLine();
 	}
 };
@@ -564,10 +669,11 @@ public:
 	render(Renderer& r) const override
 	{
 		r.emitText("```" + std::string(mCodeLang));
-		r.emitBlankLine();
+		r.emitNewLine();
 		r.emitText(mCodeBlock);
-		r.emitBlankLine();
+		r.emitNewLine();
 		r.emitText("```");
+		r.emitNewLine();
 	}
 };
 
@@ -576,7 +682,7 @@ public:
  *
  * Use `Document::blockQuote()` to add block quotes to the document.
  */
-class BlockQuote : public Block, public ChunkContainer
+class BlockQuote : public Block, public ChunkContainer<BlockQuote>
 {
 public:
 	void
@@ -612,7 +718,7 @@ public:
  *
  *		doc.line();
  *
- * 		doc.codeBlock("c", " int example_function() { printf(\"I will have syntax highlighting!\"); } ");
+ * 		doc.codeBlock("c", " int example_function() { printf("I will have syntax highlighting!"); } ");
  * }
  */
 class Document : public Block
@@ -691,9 +797,9 @@ public:
 	}
 
 	Line&
-	line()
+	line(size_t thickness = 1U)
 	{
-		auto block = std::make_unique<Line>();
+		auto block = std::make_unique<Line>(thickness);
 
 		Line& bRef = *block;
 
