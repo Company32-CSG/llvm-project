@@ -5,8 +5,10 @@
 #include "../support/Markup.h"
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string_view>
 #include <vector>
@@ -14,24 +16,61 @@
 namespace clang::clangd::c32::doxygen {
 
 const std::vector<DoxygenTag> TagList = {
-	{ "brief", "Summary of documented symbol." },
-	{ "deprecated", "Mark usage of the documented symbol as deprecated." },
-	{ "example", "Example usage: @example[c] { ... }", { "usage" } },
-	{ "markdown", "Inline markdown", { "md" } },
-	{ "param", "Function parameter. Supports [in], [out], [in:optional], etc." },
-	{ "ref", "Reference to a defined symbol." },
-	{ "returns", "Description of return value.", { "return" } },
-	{ "retval", "Description of a specific return value.", { "ret", "result" } },
-	{ "since", "API version this symbol was first available (e.g., `@since 1.5.0`)" },
-	{ "warning", "Provide a warning to anyone using the documented symbol." },
+	{ TagType::Brief, false, "brief", "Summary of documented symbol." },
+	{ TagType::Deprecated, false, "deprecated", "Mark usage of the documented symbol as deprecated." },
+	{ TagType::Example, false, "example", "Example usage: @example[c] { ... }", { "usage" } },
+	{ TagType::Member, true, "member", "Reference a member of the current class or struct.", { "m" } },
+	{ TagType::P, true, "p", "Reference to a parameter defined by the @param tag.", { "pref" } },
+	{ TagType::Param, false, "param", "Function parameter. Supports [in], [out], [in,out,optional], etc." },
+	{ TagType::Ref, true, "ref", "Reference to a defined symbol.", { "r" } },
+	{ TagType::Returns, false, "returns", "Description of return value.", { "return" } },
+	{ TagType::Retval, false, "retval", "Description of a specific return value.", { "ret", "result" } },
+	{ TagType::Warning, false, "warning", "Provide a warning to anyone using the documented symbol." },
+
+	{ TagType::Custom, false, "note", "Additional notes or commentary." },
+	{ TagType::Custom, false, "attention", "Highlights something that needs attention." },
+	{ TagType::Custom, false, "author", "Specifies the author of the code or documentation." },
+	{ TagType::Custom, false, "copyright", "Specifies copyright details." },
+	{ TagType::Custom, false, "date", "Specifies the date of the documentation or change." },
+	{ TagType::Custom, false, "details", "Provides detailed documentation following @brief." },
+	{ TagType::Custom, false, "exception", "Documents an exception that may be thrown." },
+	{ TagType::Custom, false, "ingroup", "Associates a symbol with a documentation group." },
+	{ TagType::Custom, false, "li", "Represents a list item inside @par or similar sections." },
+	{ TagType::Custom, false, "mainpage", "Specifies the main page content of the documentation." },
+	{ TagType::Custom, false, "name", "Sets the name of a group or section." },
+	{ TagType::Custom, false, "par", "Starts a paragraph block." },
+	{ TagType::Custom, false, "post", "Postcondition for a function or method." },
+	{ TagType::Custom, false, "pre", "Precondition for a function or method." },
+	{ TagType::Custom, false, "remark", "Provides an additional remark or observation." },
+	{ TagType::Custom, false, "remark", "Provides an additional remark or observation." },
+	{ TagType::Custom, false, "see", "Cross-reference to another documented entity." },
+	{ TagType::Custom, false, "since", "Documents when the symbol was added." },
+	{ TagType::Custom, false, "throws", "Documents an exception a function may throw." },
+	{ TagType::Custom, false, "todo", "Marks something that needs to be completed." },
+	{ TagType::Custom, false, "tparam", "Describes a template parameter.", { "templateparam" } },
+	{ TagType::Custom, false, "version", "Specifies version information." },
+	{ TagType::Custom, false, "section", "Defines a named documentation section." },
+	{ TagType::Custom, false, "subsection", "Defines a subsection inside a section." },
+	{ TagType::Custom, false, "code", "Marks the beginning of a code block." },
+	{ TagType::Custom, false, "endcode", "Marks the end of a code block." },
+	{ TagType::Custom, false, "verbatim", "Begins a raw text block." },
+	{ TagType::Custom, false, "endverbatim", "Ends a raw text block." },
+	{ TagType::Custom, false, "defgroup", "Defines a named documentation group." },
+	{ TagType::Custom, false, "addtogroup", "Adds symbols to an existing documentation group." },
+	{ TagType::Custom, false, "anchor", "Marks a location for cross-referencing." },
+	{ TagType::Custom, false, "link", "Starts an inline link to a documented symbol." },
+	{ TagType::Custom, false, "endlink", "Ends an inline link block." },
+	{ TagType::Custom, false, "htmlonly", "Section only rendered in HTML output." },
+	{ TagType::Custom, false, "endhtmlonly", "Ends HTML-only section." },
+	{ TagType::Custom, false, "latexonly", "Section only rendered in LaTeX output." },
+	{ TagType::Custom, false, "endlatexonly", "Ends LaTeX-only section." },
 };
 
-constexpr std::string_view TagInitiatorList[] = {
-	"@",
-	"\\",
+constexpr char TagInitiatorList[] = {
+	'@',
+	'\\',
+	'%'
 };
-
-static std::pair<size_t, std::string_view> findClosestTagInitiator(std::string_view contents, size_t offset);
 
 /* ------------------------------------------------------------ */
 
@@ -41,145 +80,36 @@ getAllTags()
 	return llvm::ArrayRef(TagList);
 }
 
-const llvm::ArrayRef<std::string_view>
+const std::vector<std::string_view>
+getAllTagNames()
+{
+	std::vector<std::string_view> ret;
+
+	size_t size = TagList.size();
+
+	for (const auto& tag : TagList)
+		size += tag.aliases.size();
+
+	ret.reserve(size);
+
+	for (const auto& tag : TagList)
+	{
+		ret.push_back(tag.name);
+
+		ret.insert(
+			ret.end(),
+			tag.aliases.begin(),
+			tag.aliases.end()
+		);
+	}
+
+	return ret;
+}
+
+const llvm::ArrayRef<char>
 getAllTagInitiators()
 {
 	return llvm::ArrayRef(TagInitiatorList, std::size(TagInitiatorList));
-}
-
-CodeCompleteResult
-tagCompletion(std::string_view contents, size_t offset)
-{
-	CodeCompleteResult result;
-	std::string prefix;
-
-	/* Find the tag initiator closest to the cursor! */
-	auto [tagPos, tagInitiator] = findClosestTagInitiator(contents, offset);
-
-	if (std::string_view::npos == tagPos)
-		return CodeCompleteResult();
-
-	if ((tagPos + 1U) < offset)
-		prefix = contents.substr(tagPos + 1U, offset - tagPos - 1U);
-
-	Range completionRange = {
-		offsetToPosition(contents, tagPos),
-		offsetToPosition(contents, offset),
-	};
-
-	auto buildItemDoc = [](const DoxygenTag& tag)
-	{
-		markup::Document doc;
-
-		doc.addParagraph().appendText(tag.description);
-
-		return doc;
-	};
-
-	/* C++ 17 doesn't allow capturing structured bindings so we gotta pass tagInitiator explicitly by ref */
-	auto buildItem = [&, &tagInitiator = tagInitiator](const DoxygenTag& tag)
-	{
-		std::vector<CodeCompletion> ret;
-
-		ret.reserve(1 + tag.aliases.size());
-
-		CodeCompletion& item = ret.emplace_back();
-
-		item.Name				  = std::string(tagInitiator) + std::string(tag.name);
-		item.FilterText			  = item.Name;
-		item.Kind				  = CompletionItemKind::Property;
-		item.Documentation		  = buildItemDoc(tag);
-		item.CompletionTokenRange = completionRange;
-
-		CodeCompletion itemAlias = item;
-
-		for (const auto& alias : tag.aliases)
-		{
-			itemAlias.Name		 = std::string(tagInitiator) + std::string(alias);
-			itemAlias.FilterText = itemAlias.Name;
-
-			ret.push_back(itemAlias);
-		}
-
-		return ret;
-	};
-
-	/* Return all tags since we are matching on just initiator (e.g., '@') */
-	if (prefix.empty())
-	{
-		for (const auto& tag : TagList)
-		{
-			auto tags = buildItem(tag);
-
-			result.Completions.insert(result.Completions.end(), tags.begin(), tags.end());
-		}
-
-		return result;
-	}
-
-	/* With a prefix, loop through and find all matching tags */
-	for (const auto& tag : TagList)
-	{
-		/* Does it match the tag name? */
-		if (0U == tag.name.rfind(prefix, 0U))
-		{
-			auto tags = buildItem(tag);
-
-			result.Completions.insert(result.Completions.end(), tags.begin(), tags.end());
-			continue;
-		}
-
-		/* Does it match one of the tag's aliases? */
-		for (const auto& alias : tag.aliases)
-		{
-			if (0U == alias.rfind(prefix, 0U))
-			{
-				auto tags = buildItem(tag);
-
-				result.Completions.insert(result.Completions.end(), tags.begin(), tags.end());
-				break;
-			}
-		}
-	}
-
-	return result;
-}
-
-bool
-inDoxygenComment(std::string_view contents, size_t cursorOffset)
-{
-	size_t starBlockStart = contents.rfind("/**", cursorOffset);
-	size_t exclBlockStart = contents.rfind("/*!", cursorOffset);
-	size_t blockStart	  = std::string::npos;
-
-	/* Select where to start. We want the comment block that is closest to the cursor! */
-
-	if (std::string::npos != starBlockStart && std::string::npos != exclBlockStart)
-		blockStart = std::max(starBlockStart, exclBlockStart);
-	else if (std::string::npos != starBlockStart)
-		blockStart = starBlockStart;
-	else if (std::string::npos != exclBlockStart)
-		blockStart = exclBlockStart;
-
-	/* Found the start of a '/** or '/*!' Doxygen comment */
-	if (std::string::npos != blockStart)
-	{
-		size_t blockEnd = contents.find("*/", blockStart);
-
-		/* We are definitely in a Doxygen comment */
-		if (std::string::npos == blockEnd || cursorOffset < blockEnd)
-			return true;
-	}
-
-	bool startsWithThreeSlash = lineStartsWith(contents, cursorOffset, "///");
-	bool startsWithExclSlash  = lineStartsWith(contents, cursorOffset, "//!");
-
-	/* We are on a '///' or '//!' line */
-	if (startsWithThreeSlash || startsWithExclSlash)
-		return true;
-
-	/* Not in a Doxygen comment */
-	return false;
 }
 
 bool
@@ -194,14 +124,46 @@ isDoxygenTagInitiator(std::string_view contents)
 	return false;
 }
 
-static std::pair<size_t, std::string_view>
-findClosestTagInitiator(std::string_view contents, size_t offset)
+bool
+isDoxygenTagInitiator(char c)
 {
-	std::pair<size_t, std::string_view> ret = { std::string_view::npos, "" };
-
-	for (const auto& initiator : TagInitiatorList)
+	for (const auto& ini : TagInitiatorList)
 	{
-		size_t pos = contents.rfind(initiator, offset);
+		if (ini == c)
+			return true;
+	}
+
+	return false;
+}
+
+const DoxygenTag*
+getDoxygenTagByName(std::string_view name)
+{
+	auto lower = lowercase(name);
+
+	for (const auto& tag : TagList)
+	{
+		if (tag.name == lower)
+			return &tag;
+
+		for (const auto& alias : tag.aliases)
+		{
+			if (alias == lower)
+				return &tag;
+		}
+	}
+
+	return nullptr;
+}
+
+std::pair<size_t, char>
+findClosestTagInitiator(std::string_view contents)
+{
+	std::pair<size_t, char> ret = { std::string_view::npos, ' ' };
+
+	for (const auto initiator : TagInitiatorList)
+	{
+		size_t pos = contents.find(initiator);
 
 		if (std::string_view::npos != pos)
 		{
@@ -219,6 +181,158 @@ findClosestTagInitiator(std::string_view contents, size_t offset)
 	}
 
 	return ret;
+}
+
+bool
+isEscaping(std::string_view contents, size_t offset)
+{
+	if (0U == offset || offset >= contents.size())
+		return false;
+
+	return ('^' == contents[offset - 1U]);
+}
+
+bool
+isDoxygenEscape(const char c)
+{
+	return ('^' == c);
+}
+
+std::string
+unescape(std::string_view sv)
+{
+	std::string result;
+
+	result.reserve(sv.size());
+
+	bool escape = false;
+
+	for (size_t i = 0U; i < sv.size(); i++)
+	{
+		if (isDoxygenEscape(sv[i]) && !escape)
+		{
+			escape = true;
+
+			continue;
+		}
+
+		result += sv[i];
+		escape = false;
+	}
+
+	return result;
+}
+
+bool
+tagStartsLine(std::string_view sv, size_t pos)
+{
+	if (pos >= sv.size())
+		return false;
+
+	auto lineStart = sv.rfind('\n', pos);
+
+	if (std::string_view::npos == lineStart)
+		lineStart = 0U;
+	else
+		lineStart += 1U;
+
+	if (lineStart == pos)
+		return true;
+
+	for (const auto c : sv.substr(lineStart, pos - lineStart))
+	{
+		if (!(std::isspace(static_cast<unsigned char>(c))))
+			return false;
+	}
+
+	return true;
+}
+
+std::optional<MatchedTag>
+getTag(std::string_view sv, size_t pos, TagContext context)
+{
+	MatchedTag ret;
+
+	auto initialPosition = pos;
+
+	if (pos >= sv.size())
+		return std::nullopt;
+
+	if (0U != pos && isDoxygenEscape(sv[pos - 1U]))
+		return std::nullopt;
+
+	if (!isDoxygenTagInitiator(sv[pos]))
+		return std::nullopt;
+
+	ret.initiator = sv[pos];
+
+	/* Advance past the tag initiator character */
+	pos += 1U;
+
+	/* Advance past whitespace */
+
+	while (pos < sv.size() && std::isspace(static_cast<unsigned char>(sv[pos])))
+		pos += 1U;
+
+	for (const auto& tag : TagList)
+	{
+		if (TagContext::Any != context)
+		{
+			bool inlineOnly = (TagContext::Inline == context);
+			bool blockOnly	= (TagContext::Block == context);
+
+			if ((inlineOnly && !tag.isInline) || (blockOnly && tag.isInline))
+				continue;
+		}
+
+		/* Check for aliases first */
+		for (const auto& alias : tag.aliases)
+		{
+			size_t nameLen = alias.size();
+
+			if (0 != sv.compare(pos, nameLen, alias))
+				continue;
+
+			auto after = pos + nameLen;
+
+			if (after != sv.size() && !isTagTerminator(sv[after]))
+				continue;
+
+			ret.tag		 = &tag;
+			ret.name	 = alias;
+			ret.consumed = after - initialPosition;
+
+			return ret;
+		}
+
+		/* Now check the canonical tag name */
+		size_t nameLen = tag.name.size();
+
+		if (0 != sv.compare(pos, nameLen, tag.name))
+			continue;
+
+		auto after = pos + nameLen;
+
+		if (after != sv.size() && !isTagTerminator(sv[after]))
+			continue;
+
+		ret.tag		 = &tag;
+		ret.name	 = tag.name;
+		ret.consumed = after - initialPosition;
+
+		return ret;
+	}
+
+	return std::nullopt;
+}
+
+bool
+isTagTerminator(char c)
+{
+	unsigned char uc = static_cast<unsigned char>(c);
+
+	// letters, digits or underscore are _not_ terminators:
+	return !(std::isalnum(uc) || c == '_' || c == ':');
 }
 
 } // namespace clang::clangd::c32::doxygen
