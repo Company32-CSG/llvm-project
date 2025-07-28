@@ -16,8 +16,14 @@
 #include "Headers.h"
 #include "IncludeCleaner.h"
 #include "ParsedAST.h"
+#include "Protocol.h"
 #include "Selection.h"
 #include "SourceCode.h"
+#include "XRefs.h"
+#include "c32-doxygen/DoxygenParser.hpp"
+#include "c32-doxygen/Markdown.hpp"
+#include "c32-doxygen/Utils.hpp"
+#include "c32-doxygen/to_string.hpp"
 #include "clang-include-cleaner/Analysis.h"
 #include "clang-include-cleaner/IncludeSpeller.h"
 #include "clang-include-cleaner/Types.h"
@@ -57,6 +63,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
+
 #include <algorithm>
 #include <optional>
 #include <string>
@@ -86,7 +93,7 @@ std::string
 getLocalScope(const Decl* D)
 {
 	std::vector<std::string> Scopes;
-	const DeclContext* DC = D->getDeclContext();
+	const DeclContext*		 DC = D->getDeclContext();
 
 	// ObjC scopes won't have multiple components for us to join,
 	// instead:
@@ -163,6 +170,20 @@ getNamespaceScope(const Decl* D)
 std::string
 printDefinition(const Decl* D, PrintingPolicy PP, const syntax::TokenBuffer& TB)
 {
+	/// Resolve anonymous enums to its typedef if possible
+	if (auto* ED = llvm::dyn_cast<clang::EnumDecl>(D))
+	{
+		if (auto* TD = ED->getTypedefNameForAnonDecl())
+			D = TD;
+	}
+
+	/// Resolve anonymous records (e.g., struct, union, etc.) to its typedef if possible
+	if (auto* RD = llvm::dyn_cast<clang::RecordDecl>(D))
+	{
+		if (auto* TD = RD->getTypedefNameForAnonDecl())
+			D = TD;
+	}
+
 	if (auto* VD = llvm::dyn_cast<VarDecl>(D))
 	{
 		if (auto* IE = VD->getInit())
@@ -175,7 +196,7 @@ printDefinition(const Decl* D, PrintingPolicy PP, const syntax::TokenBuffer& TB)
 		}
 	}
 
-	std::string Definition;
+	std::string				 Definition;
 	llvm::raw_string_ostream OS(Definition);
 
 	D->print(OS, PP);
@@ -261,7 +282,7 @@ printType(const NonTypeTemplateParmDecl* NTTP, const PrintingPolicy& PP)
 HoverInfo::PrintedType
 printType(const TemplateTemplateParmDecl* TTP, const PrintingPolicy& PP)
 {
-	HoverInfo::PrintedType Result;
+	HoverInfo::PrintedType	 Result;
 	llvm::raw_string_ostream OS(Result.Type);
 	OS << "template <";
 	llvm::StringRef Sep = "";
@@ -302,9 +323,8 @@ fetchTemplateParameters(const TemplateParameterList* Params, const PrintingPolic
 			{
 				P.Default.emplace();
 				llvm::raw_string_ostream Out(*P.Default);
-				TTP->getDefaultArgument().getArgument().print(PP,
-					Out,
-					/*IncludeType=*/false);
+				TTP->getDefaultArgument().getArgument().print(PP, Out,
+															  /*IncludeType=*/false);
 			}
 		}
 		else if (const auto* NTTP = dyn_cast<NonTypeTemplateParmDecl>(Param))
@@ -318,9 +338,8 @@ fetchTemplateParameters(const TemplateParameterList* Params, const PrintingPolic
 			{
 				P.Default.emplace();
 				llvm::raw_string_ostream Out(*P.Default);
-				NTTP->getDefaultArgument().getArgument().print(PP,
-					Out,
-					/*IncludeType=*/false);
+				NTTP->getDefaultArgument().getArgument().print(PP, Out,
+															   /*IncludeType=*/false);
 			}
 		}
 		else if (const auto* TTPD = dyn_cast<TemplateTemplateParmDecl>(Param))
@@ -334,9 +353,8 @@ fetchTemplateParameters(const TemplateParameterList* Params, const PrintingPolic
 			{
 				P.Default.emplace();
 				llvm::raw_string_ostream Out(*P.Default);
-				TTPD->getDefaultArgument().getArgument().print(PP,
-					Out,
-					/*IncludeType*/ false);
+				TTPD->getDefaultArgument().getArgument().print(PP, Out,
+															   /*IncludeType*/ false);
 			}
 		}
 		TempParameters.push_back(std::move(P));
@@ -366,7 +384,8 @@ getUnderlyingFunction(const Decl* D)
 	return D->getAsFunction();
 }
 
-// Returns the decl that should be used for querying comments, either from index or AST.
+// Returns the decl that should be used for querying comments, either from index
+// or AST.
 const NamedDecl*
 getDeclForComment(const NamedDecl* D)
 {
@@ -413,10 +432,8 @@ enhanceFromIndex(HoverInfo& Hover, const NamedDecl& ND, const SymbolIndex* Index
 	// Skip querying for non-indexable symbols, there's no point.
 	// We're searching for symbols that might be indexed outside
 	// this main file.
-	if (!SymbolCollector::shouldCollectSymbol(ND,
-			ND.getASTContext(),
-			SymbolCollector::Options(),
-			/*IsMainFileOnly=*/false))
+	if (!SymbolCollector::shouldCollectSymbol(ND, ND.getASTContext(), SymbolCollector::Options(),
+											  /*IsMainFileOnly=*/false))
 		return;
 
 	auto ID = getSymbolID(&ND);
@@ -425,7 +442,8 @@ enhanceFromIndex(HoverInfo& Hover, const NamedDecl& ND, const SymbolIndex* Index
 		return;
 	LookupRequest Req;
 	Req.IDs.insert(ID);
-	Index->lookup(Req, [&](const Symbol& S) { Hover.Documentation = std::string(S.Documentation); });
+	Index->lookup(Req, [&](const Symbol& S)
+				  { Hover.Documentation = std::string(S.Documentation); });
 }
 
 // Default argument might exist but be unavailable, in the case of
@@ -521,12 +539,13 @@ printExprValue(const Expr* E, const ASTContext& Ctx)
 	// walking up to the enclosing call. Evaluating an expression of
 	// void type doesn't produce a meaningful result.
 	QualType T = E->getType();
+
 	if (T.isNull() || T->isFunctionType() || T->isFunctionPointerType() || T->isFunctionReferenceType() || T->isVoidType())
 		return std::nullopt;
 
 	Expr::EvalResult Constant;
-	// Attempt to evaluate. If expr is dependent, evaluation
-	// crashes!
+
+	// Attempt to evaluate. If expr is dependent, evaluation crashes!
 	if (E->isValueDependent() || !E->EvaluateAsRValue(Constant, Ctx) ||
 		// Disable printing for record-types, as they are usually
 		// confusing and might make clang crash while printing the
@@ -534,20 +553,23 @@ printExprValue(const Expr* E, const ASTContext& Ctx)
 		Constant.Val.isStruct() || Constant.Val.isUnion())
 		return std::nullopt;
 
-	// Show enums symbolically, not numerically like
-	// APValue::printPretty().
+	// Show enums symbolically, not numerically like APValue::printPretty().
 	if (T->isEnumeralType() && Constant.Val.isInt() && Constant.Val.getInt().getSignificantBits() <= 64)
 	{
 		// Compare to int64_t to avoid bit-width match requirements.
 		int64_t Val = Constant.Val.getInt().getExtValue();
+
 		for (const EnumConstantDecl* ECD : T->castAs<EnumType>()->getDecl()->enumerators())
+		{
 			if (ECD->getInitVal() == Val)
 				return llvm::formatv("{0} ({1})", ECD->getNameAsString(), printHex(Constant.Val.getInt())).str();
+		}
 	}
-	// Show hex value of integers if they're at least 10 (or
-	// negative!)
+
+	// Show hex value of integers if they're at least 10 (or negative!)
 	if (T->isIntegralOrEnumerationType() && Constant.Val.isInt() && Constant.Val.getInt().getSignificantBits() <= 64 && Constant.Val.getInt().uge(10))
 		return llvm::formatv("{0} ({1})", Constant.Val.getAsString(Ctx, T), printHex(Constant.Val.getInt())).str();
+
 	return Constant.Val.getAsString(Ctx, T);
 }
 
@@ -583,8 +605,8 @@ printExprValue(const SelectionTree::Node* N, const ASTContext& Ctx)
 				break;
 			if (auto Val = printExprValue(E, Ctx))
 				return PrintExprResult{ /*PrintedValue=*/std::move(Val),
-					/*Expr=*/E,
-					/*Node=*/N };
+										/*Expr=*/E,
+										/*Node=*/N };
 		}
 		else if (N->ASTNode.get<Decl>() || N->ASTNode.get<Stmt>())
 		{
@@ -595,8 +617,8 @@ printExprValue(const SelectionTree::Node* N, const ASTContext& Ctx)
 		}
 	}
 	return PrintExprResult{ /*PrintedValue=*/std::nullopt,
-		/*Expr=*/nullptr,
-		/*Node=*/N };
+							/*Expr=*/nullptr,
+							/*Node=*/N };
 }
 
 std::optional<StringRef>
@@ -715,6 +737,7 @@ synthesizeDocumentation(const NamedDecl* ND)
 				return llvm::formatv("Trivial setter for `{0}`.", *SetterField);
 		}
 	}
+
 	return "";
 }
 
@@ -723,7 +746,7 @@ HoverInfo
 getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, const SymbolIndex* index, const syntax::TokenBuffer& tokenBuffer)
 {
 	HoverInfo HI;
-	auto& Ctx = namedDecl->getASTContext();
+	auto&	  Ctx = namedDecl->getASTContext();
 
 	HI.AccessSpecifier = getAccessSpelling(namedDecl->getAccess()).str();
 	HI.NamespaceScope  = getNamespaceScope(namedDecl);
@@ -742,10 +765,27 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 
 	enhanceFromIndex(HI, *CommentD, index);
 
-	if (HI.Documentation.empty())
-		HI.Documentation = synthesizeDocumentation(namedDecl);
+	// if (HI.Documentation.empty())
+	// 	HI.Documentation = synthesizeDocumentation(namedDecl);
 
 	HI.Kind = index::getSymbolInfo(namedDecl).Kind;
+
+	if (HI.Kind == index::SymbolKind::TypeAlias)
+	{
+		if (const auto* TN = dyn_cast<TypedefNameDecl>(namedDecl))
+		{
+			QualType desugared = TN->getUnderlyingType().getDesugaredType(Ctx);
+
+			if (const TagType* tagType = desugared->getAs<TagType>())
+			{
+				const TagDecl* tagDecl = tagType->getDecl();
+
+				HI.UnderlyingKind = index::getSymbolInfo(tagDecl).Kind;
+
+				llvm::errs() << "Underlying Kind: " << std::to_string(*(HI.UnderlyingKind)) << "\n";
+			}
+		}
+	}
 
 	// Fill in template params.
 	if (const TemplateDecl* TD = namedDecl->getDescribedTemplate())
@@ -778,20 +818,100 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 	else if (const auto* TAT = dyn_cast<TypeAliasTemplateDecl>(namedDecl))
 		HI.Type = printType(TAT->getTemplatedDecl()->getUnderlyingType(), Ctx, printPolicy);
 
+	if (const auto* PVD = dyn_cast<ParmVarDecl>(namedDecl))
+	{
+		if (const auto* FD = dyn_cast<FunctionDecl>(PVD->getDeclContext()))
+		{
+			const auto* CommentD = getDeclForComment(FD);
+			HI.Documentation	 = getDeclComment(Ctx, *CommentD);
+		}
+	}
 	// Fill in value with evaluated initializer if possible.
-	if (const auto* Var = dyn_cast<VarDecl>(namedDecl); Var && !Var->isInvalidDecl())
+	else if (const auto* Var = dyn_cast<VarDecl>(namedDecl); Var && !Var->isInvalidDecl())
 	{
 		if (const Expr* Init = Var->getInit())
 			HI.Value = printExprValue(Init, Ctx);
 	}
+	else if (const auto* TD = dyn_cast<TypedefNameDecl>(namedDecl))
+	{
+		if (const auto* ET = TD->getUnderlyingType()->getAs<EnumType>())
+		{
+			const auto* ED = ET->getDecl();
+
+			HI.EnumMembers.emplace();
+
+			for (auto* ECD : ED->enumerators())
+			{
+				HoverInfo::EnumMember Member;
+
+				if (const auto* Init = ECD->getInitExpr())
+				{
+					auto& AST = ECD->getASTContext();
+					auto& SM  = AST.getSourceManager();
+					auto  LO  = AST.getLangOpts();
+
+					// Make a CharSourceRange that covers the entire Expr token-wise:
+					auto Range = CharSourceRange::getTokenRange(Init->getSourceRange());
+
+					// Extract the exact text the user wrote:
+					Member.Expr = clang::Lexer::getSourceText(Range, SM, LO);
+				}
+
+				Member.Name	 = ECD->getNameAsString();
+				Member.Value = toString(ECD->getInitVal(), 10);
+
+				HI.EnumMembers->emplace_back(std::move(Member));
+			}
+		}
+	}
+	else if (const auto* ED = dyn_cast<EnumDecl>(namedDecl))
+	{
+		HI.EnumMembers.emplace();
+
+		for (auto* ECD : ED->enumerators())
+		{
+			HoverInfo::EnumMember Member;
+
+			if (const auto* Init = ECD->getInitExpr())
+			{
+				auto& AST = ECD->getASTContext();
+				auto& SM  = AST.getSourceManager();
+				auto  LO  = AST.getLangOpts();
+
+				// Make a CharSourceRange that covers the entire Expr token-wise:
+				auto Range = CharSourceRange::getTokenRange(Init->getSourceRange());
+
+				// Extract the exact text the user wrote:
+				Member.Expr = clang::Lexer::getSourceText(Range, SM, LO);
+			}
+
+			Member.Name	 = ECD->getNameAsString();
+			Member.Value = toString(ECD->getInitVal(), 10);
+
+			HI.EnumMembers->emplace_back(std::move(Member));
+		}
+	}
 	else if (const auto* ECD = dyn_cast<EnumConstantDecl>(namedDecl))
 	{
 		// Dependent enums (e.g. nested in template classes) don't have values yet.
+
+		const EnumDecl* ED = dyn_cast_or_null<EnumDecl>(ECD->getDeclContext());
+
 		if (!ECD->getType()->isDependentType())
 			HI.Value = toString(ECD->getInitVal(), 10);
+
+		if (ED && ED->getIdentifier())
+		{
+			HI.ParentEnumName = ED->getNameAsString();
+		}
+		else
+		{
+			HI.ParentEnumName = "...";
+		}
 	}
 
 	HI.Definition = printDefinition(namedDecl, printPolicy, tokenBuffer);
+	HI.Definition = c32::canonicalizeWhitespace(HI.Definition);
 
 	return HI;
 }
@@ -815,9 +935,8 @@ getPredefinedExprHoverContents(const PredefinedExpr& PE, ASTContext& Ctx, const 
 	{
 		// Inside templates, the approximate type `const char[]` is
 		// still useful.
-		QualType StringType = Ctx.getIncompleteArrayType(Ctx.CharTy.withConst(),
-			ArraySizeModifier::Normal,
-			/*IndexTypeQuals=*/0);
+		QualType StringType = Ctx.getIncompleteArrayType(Ctx.CharTy.withConst(), ArraySizeModifier::Normal,
+														 /*IndexTypeQuals=*/0);
 		HI.Type				= printType(StringType, Ctx, PP);
 	}
 	return HI;
@@ -828,8 +947,8 @@ evaluateMacroExpansion(unsigned int SpellingBeginOffset, unsigned int SpellingEn
 {
 	auto& Context = AST.getASTContext();
 	auto& Tokens  = AST.getTokens();
-	auto PP		  = getPrintingPolicy(Context.getPrintingPolicy());
-	auto Tree	  = SelectionTree::createRight(Context, Tokens, SpellingBeginOffset, SpellingEndOffset);
+	auto  PP	  = getPrintingPolicy(Context.getPrintingPolicy());
+	auto  Tree	  = SelectionTree::createRight(Context, Tokens, SpellingBeginOffset, SpellingEndOffset);
 
 	// If macro expands to one single token, rule out punctuator or
 	// digraph. E.g., for the case `array L_BRACKET 42 R_BRACKET;`
@@ -872,7 +991,7 @@ evaluateMacroExpansion(unsigned int SpellingBeginOffset, unsigned int SpellingEn
 HoverInfo
 getHoverContents(const DefinedMacro& Macro, const syntax::Token& Tok, ParsedAST& AST)
 {
-	HoverInfo HI;
+	HoverInfo	   HI;
 	SourceManager& SM = AST.getSourceManager();
 	HI.Name			  = std::string(Macro.Name);
 	HI.Kind			  = index::SymbolKind::Macro;
@@ -892,7 +1011,7 @@ getHoverContents(const DefinedMacro& Macro, const syntax::Token& Tok, ParsedAST&
 	if (SM.getPresumedLoc(EndLoc, /*UseLineDirectives=*/false).isValid())
 	{
 		EndLoc = Lexer::getLocForEndOfToken(EndLoc, 0, SM, AST.getLangOpts());
-		bool Invalid;
+		bool	  Invalid;
 		StringRef Buffer = SM.getBufferData(SM.getFileID(StartLoc), &Invalid);
 		if (!Invalid)
 		{
@@ -913,6 +1032,7 @@ getHoverContents(const DefinedMacro& Macro, const syntax::Token& Tok, ParsedAST&
 		{
 			ExpansionText += ExpandedTok.text(SM);
 			ExpansionText += " ";
+
 			if (ExpansionText.size() > 2048)
 			{
 				ExpansionText.clear();
@@ -922,12 +1042,7 @@ getHoverContents(const DefinedMacro& Macro, const syntax::Token& Tok, ParsedAST&
 
 		if (!ExpansionText.empty())
 		{
-			if (!HI.Definition.empty())
-			{
-				HI.Definition += "\n\n";
-			}
-			HI.Definition += "// Expands to\n";
-			HI.Definition += ExpansionText;
+			HI.Expanded = ExpansionText;
 		}
 
 		auto Evaluated = evaluateMacroExpansion(
@@ -935,21 +1050,27 @@ getHoverContents(const DefinedMacro& Macro, const syntax::Token& Tok, ParsedAST&
 			/*SpellingEndOffset=*/
 			SM.getFileOffset(Tok.endLocation()),
 			/*Expanded=*/Expansion->Expanded,
-			AST);
+			AST
+		);
+
 		HI.Value = std::move(Evaluated.Value);
 		HI.Type	 = std::move(Evaluated.Type);
 	}
+
 	return HI;
 }
 
 std::string
 typeAsDefinition(const HoverInfo::PrintedType& PType)
 {
-	std::string Result;
+	std::string				 Result;
 	llvm::raw_string_ostream OS(Result);
+
 	OS << PType.Type;
+
 	if (PType.AKA)
 		OS << " // aka: " << *PType.AKA;
+
 	return Result;
 }
 
@@ -1103,52 +1224,6 @@ getHoverContents(const Attr* A, ParsedAST& AST)
 	return HI;
 }
 
-bool
-isParagraphBreak(llvm::StringRef Rest)
-{
-	return Rest.ltrim(" \t").starts_with("\n");
-}
-
-bool
-punctuationIndicatesLineBreak(llvm::StringRef Line)
-{
-	constexpr llvm::StringLiteral Punctuation = R"txt(.:,;!?)txt";
-
-	Line = Line.rtrim();
-	return !Line.empty() && Punctuation.contains(Line.back());
-}
-
-bool
-isHardLineBreakIndicator(llvm::StringRef Rest)
-{
-	// '-'/'*' md list, '@'/'\' documentation command, '>' md
-	// blockquote,
-	// '#' headings, '`' code blocks
-	constexpr llvm::StringLiteral LinebreakIndicators = R"txt(-*@\>#`)txt";
-
-	Rest = Rest.ltrim(" \t");
-	if (Rest.empty())
-		return false;
-
-	if (LinebreakIndicators.contains(Rest.front()))
-		return true;
-
-	if (llvm::isDigit(Rest.front()))
-	{
-		llvm::StringRef AfterDigit = Rest.drop_while(llvm::isDigit);
-		if (AfterDigit.starts_with(".") || AfterDigit.starts_with(")"))
-			return true;
-	}
-	return false;
-}
-
-bool
-isHardLineBreakAfter(llvm::StringRef Line, llvm::StringRef Rest)
-{
-	// Should we also consider whether Line is short?
-	return punctuationIndicatesLineBreak(Line) || isHardLineBreakIndicator(Rest);
-}
-
 void
 addLayoutInfo(const NamedDecl& ND, HoverInfo& HI)
 {
@@ -1228,7 +1303,7 @@ maybeAddCalleeArgInfo(const SelectionTree::Node* N, HoverInfo& HI, const Printin
 	if (!OuterNode.Parent)
 		return;
 
-	const FunctionDecl* FD = nullptr;
+	const FunctionDecl*			FD = nullptr;
 	llvm::ArrayRef<const Expr*> Args;
 
 	if (const auto* CE = OuterNode.Parent->ASTNode.get<CallExpr>())
@@ -1366,7 +1441,8 @@ pickDeclToUse(llvm::ArrayRef<const NamedDecl*> Candidates)
 	//     template <typename T> void bar() { fo^o(T{}); }
 	// we actually want to show the using declaration,
 	// it's not clear which declaration to pick otherwise.
-	auto BaseDecls = llvm::make_filter_range(Candidates, [](const NamedDecl* D) { return llvm::isa<UsingDecl>(D); });
+	auto BaseDecls = llvm::make_filter_range(Candidates, [](const NamedDecl* D)
+											 { return llvm::isa<UsingDecl>(D); });
 	if (std::distance(BaseDecls.begin(), BaseDecls.end()) == 1)
 		return *BaseDecls.begin();
 
@@ -1382,8 +1458,8 @@ maybeAddSymbolProviders(ParsedAST& AST, HoverInfo& HI, include_cleaner::Symbol S
 	if (RankedProviders.empty())
 		return;
 
-	const SourceManager& SM = AST.getSourceManager();
-	std::string Result;
+	const SourceManager&	  SM = AST.getSourceManager();
+	std::string				  Result;
 	include_cleaner::Includes ConvertedIncludes = convertIncludes(AST);
 	for (const auto& P : RankedProviders)
 	{
@@ -1408,6 +1484,7 @@ maybeAddSymbolProviders(ParsedAST& AST, HoverInfo& HI, include_cleaner::Symbol S
 
 	// Pick the best-ranked non-#include'd provider
 	const auto& H = RankedProviders.front();
+
 	if (H.kind() == include_cleaner::Header::Physical && H.physical() == SM.getFileEntryForID(SM.getMainFileID()))
 		// Do not show main file as provider, otherwise we'll show
 		// provider info on local variables, etc.
@@ -1423,25 +1500,32 @@ std::string
 getSymbolName(include_cleaner::Symbol Sym)
 {
 	std::string Name;
+
 	switch (Sym.kind())
 	{
 		case include_cleaner::Symbol::Declaration:
 			if (const auto* ND = llvm::dyn_cast<NamedDecl>(&Sym.declaration()))
 				Name = ND->getDeclName().getAsString();
+
 			break;
+
 		case include_cleaner::Symbol::Macro:
 			Name = Sym.macro().Name->getName();
 			break;
 	}
+
 	return Name;
 }
 
 void
-maybeAddUsedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc)
+maybeAddProvidedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc, PrintingPolicy& printPolicy)
 {
 	auto Converted = convertIncludes(AST);
+
 	llvm::DenseSet<include_cleaner::Symbol> UsedSymbols;
-	include_cleaner::walkUsed(AST.getLocalTopLevelDecls(),
+
+	include_cleaner::walkUsed(
+		AST.getLocalTopLevelDecls(),
 		collectMacroReferences(AST),
 		&AST.getPragmaIncludes(),
 		AST.getPreprocessor(),
@@ -1452,12 +1536,39 @@ maybeAddUsedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc)
 
 			if (isPreferredProvider(Inc, Converted, Providers))
 				UsedSymbols.insert(Ref.Target);
-		});
+		}
+	);
 
-	for (const auto& UsedSymbolDecl : UsedSymbols)
-		HI.UsedSymbolNames.push_back(getSymbolName(UsedSymbolDecl));
-	llvm::sort(HI.UsedSymbolNames);
-	HI.UsedSymbolNames.erase(std::unique(HI.UsedSymbolNames.begin(), HI.UsedSymbolNames.end()), HI.UsedSymbolNames.end());
+	for (const auto& usedSym : UsedSymbols)
+	{
+		HoverInfo::UsedSymbol symbol;
+
+		auto& decl = usedSym.declaration();
+		auto  info = index::getSymbolInfo(&decl);
+
+		symbol.Kind = info.Kind;
+		symbol.Name = getSymbolName(usedSym);
+
+		if (const auto* ND = dyn_cast<NamedDecl>(&decl))
+		{
+			if (const auto* TD = dyn_cast<TypedefNameDecl>(ND))
+			{
+				auto underlying = TD->getUnderlyingType().getAsString(printPolicy);
+
+				symbol.Type = HoverInfo::PrintedType(underlying.c_str());
+			}
+		}
+
+		HI.ProvidedSymbols.push_back(std::move(symbol));
+	}
+
+	HI.ProvidedSymbols.erase(
+		std::unique(
+			HI.ProvidedSymbols.begin(),
+			HI.ProvidedSymbols.end()
+		),
+		HI.ProvidedSymbols.end()
+	);
 }
 
 } // namespace
@@ -1467,9 +1578,9 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 {
 	static constexpr trace::Metric HoverCountMetric("hover", trace::Metric::Counter, "case");
 
-	PrintingPolicy printPolicy	= getPrintingPolicy(AST.getASTContext().getPrintingPolicy());
-	const SourceManager& srcMgr = AST.getSourceManager();
-	auto curLoc					= sourceLocationInMainFile(srcMgr, Pos);
+	PrintingPolicy		 printPolicy = getPrintingPolicy(AST.getASTContext().getPrintingPolicy());
+	const SourceManager& srcMgr		 = AST.getSourceManager();
+	auto				 curLoc		 = sourceLocationInMainFile(srcMgr, Pos);
 
 	if (!curLoc)
 	{
@@ -1478,7 +1589,8 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 		return std::nullopt;
 	}
 
-	const auto& tokens		  = AST.getTokens();
+	const auto& tokens = AST.getTokens();
+
 	auto tokensTouchingCursor = syntax::spelledTokensTouching(*curLoc, tokens);
 
 	// Early exit if there were no tokens around the cursor.
@@ -1502,7 +1614,7 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 		info.Definition			= URIForFile::canonicalize(include.Resolved, AST.tuPath()).file().str();
 		info.DefinitionLanguage = "";
 
-		maybeAddUsedSymbols(AST, info, include);
+		maybeAddProvidedSymbols(AST, info, include, printPolicy);
 
 		return info;
 	}
@@ -1582,7 +1694,8 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 
 				hoverInfo = getHoverContents(DeclToUse, printPolicy, Index, tokens);
 
-				// Layout info only shown when hovering on the field/class itself.
+				// Layout info only shown when hovering on the field/class
+				// itself.
 				if (DeclToUse == N->ASTNode.get<Decl>())
 					addLayoutInfo(*DeclToUse, *hoverInfo);
 
@@ -1615,15 +1728,6 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 	if (!hoverInfo)
 		return std::nullopt;
 
-	// Reformat Definition
-	// if (!hoverInfo->Definition.empty())
-	// {
-	// 	auto Replacements = format::reformat(Style, hoverInfo->Definition, tooling::Range(0, hoverInfo->Definition.size()));
-
-	// 	if (auto Formatted = tooling::applyAllReplacements(hoverInfo->Definition, Replacements))
-	// 		hoverInfo->Definition = *Formatted;
-	// }
-
 	hoverInfo->Style			  = Style;
 	hoverInfo->DefinitionLanguage = getMarkdownLanguage(AST.getASTContext());
 	hoverInfo->SymRange			  = halfOpenToRange(srcMgr, highlightRange);
@@ -1631,28 +1735,28 @@ getHover(ParsedAST& AST, Position Pos, const format::FormatStyle& Style, const S
 	return hoverInfo;
 }
 
-// Sizes (and padding) are shown in bytes if possible, otherwise in
-// bits.
+// Sizes (and padding) are shown in bytes if possible, otherwise in bits.
 static std::string
 formatSize(uint64_t SizeInBits)
 {
-	uint64_t Value	 = SizeInBits % 8 == 0 ? SizeInBits / 8 : SizeInBits;
-	const char* Unit = Value != 0 && Value == SizeInBits ? "bit" : "byte";
+	uint64_t	Value = SizeInBits % 8 == 0 ? SizeInBits / 8 : SizeInBits;
+	const char* Unit  = Value != 0 && Value == SizeInBits ? "bit" : "byte";
 	return llvm::formatv("{0} {1}{2}", Value, Unit, Value == 1 ? "" : "s").str();
 }
 
-// Offsets are shown in bytes + bits, so offsets of different fields
-// can always be easily compared.
+// Offsets are shown in bytes + bits, so offsets of different fields can always be easily compared.
 static std::string
 formatOffset(uint64_t OffsetInBits)
 {
-	const auto Bytes = OffsetInBits / 8;
-	const auto Bits	 = OffsetInBits % 8;
-	auto Offset		 = formatSize(Bytes * 8);
+	const auto Bytes  = OffsetInBits / 8;
+	const auto Bits	  = OffsetInBits % 8;
+	auto	   Offset = formatSize(Bytes * 8);
 	if (Bits != 0)
 		Offset += " and " + formatSize(Bits);
 	return Offset;
 }
+
+#if 0
 
 markup::Document
 HoverInfo::present() const
@@ -1720,7 +1824,8 @@ HoverInfo::present() const
 	// Don't print Type after Parameters or ReturnType as this will just
 	// duplicate the information
 	// if (Type && !ReturnType && !Parameters)
-	// 	Output.addParagraph().appendText("Type: ").appendCode(llvm::to_string(*Type));
+	// 	Output.addParagraph().appendText("Type:
+	// ").appendCode(llvm::to_string(*Type));
 
 	if (Value)
 	{
@@ -1746,7 +1851,7 @@ HoverInfo::present() const
 	if (CalleeArgInfo)
 	{
 		assert(CallPassType);
-		std::string Buffer;
+		std::string				 Buffer;
 		llvm::raw_string_ostream OS(Buffer);
 		OS << "Passed ";
 		if (CallPassType->PassBy != HoverInfo::PassType::Value)
@@ -1771,66 +1876,400 @@ HoverInfo::present() const
 	if (!Documentation.empty())
 		clang::clangd::c32::parseDoxygenTags(this, Documentation, Output);
 
-	if (!UsedSymbolNames.empty())
+#if 0
+	if (!UsedSymbols.empty())
 	{
 		Output.addRuler();
 		markup::Paragraph& P = Output.addParagraph();
 		P.appendText("provides ");
 
 		const std::vector<std::string>::size_type SymbolNamesLimit = 5;
-		auto Front												   = llvm::ArrayRef(UsedSymbolNames).take_front(SymbolNamesLimit);
+		auto									  Front			   = llvm::ArrayRef(UsedSymbols).take_front(SymbolNamesLimit);
 
-		llvm::interleave(Front, [&](llvm::StringRef Sym) { P.appendCode(Sym); }, [&] { P.appendText(", "); });
-		if (UsedSymbolNames.size() > Front.size())
+		llvm::interleave(Front, [&](llvm::StringRef Sym)
+			{ P.appendCode(Sym); },
+			[&]
+			{ P.appendText(", "); });
+		if (UsedSymbols.size() > Front.size())
 		{
 			P.appendText(" and ");
-			P.appendText(std::to_string(UsedSymbolNames.size() - Front.size()));
+			P.appendText(std::to_string(UsedSymbols.size() - Front.size()));
 			P.appendText(" more");
 		}
 	}
+#endif
 
 	return Output;
 }
 
-markup::Document
-HoverInfo::presentForVscode() const
-{
-	markup::Document output;
+#endif
 
+c32::markdown::Document
+HoverInfo::present() const
+{
+	c32::markdown::Document output;
+
+	auto symbolKind = concreteKind();
+
+	/* Append the symbol's definition (e.g., 'c32::markdown::Document HoverInfo::presentC32Doxygen() const') */
 	if (!Definition.empty())
 	{
-		output.addCodeBlock(Definition, DefinitionLanguage);
+		if (index::SymbolKind::EnumConstant == symbolKind)
+		{
+			std::string def = Definition;
+
+			if (const auto& val = Value)
+				def += " = " + *val;
+
+			output.codeBlock(
+				DefinitionLanguage,
+				def
+			);
+
+			/* Thick divider between the 'KEY=n' definition and any doxygen */
+			output.line(/* Thickness */ 4U);
+		}
+		else
+		{
+			output.codeBlock(
+				DefinitionLanguage,
+				Definition
+			);
+		}
 	}
 
+	/* Append the header file that provides this symbol */
 	if (!Provider.empty())
 	{
-		output.addParagraph().appendMarkdown("> _Provided by:_ __`" + Provider + "`__");
-		output.addParagraph();
+		output.blockQuote()
+			.text("Provided by:")
+			.italic()
+			.space()
+			.code(Provider)
+			.bold();
 	}
 
+	output.line();
+	output.heading(3U).text("Details");
+
+	if (Offset)
+		output.paragraph().text("Offset: " + formatOffset(*Offset));
+
+	if (Size)
+	{
+		auto& P = output.paragraph().text("Size: " + formatSize(*Size));
+
+		if (Padding && *Padding != 0)
+			P.text(llvm::formatv(" (+{0} padding)", formatSize(*Padding)).str());
+
+		if (Align)
+			P.text(", alignment " + formatSize(*Align));
+	}
+
+	if (!LocalScope.empty())
+		output.paragraph().text("LocalScope: " + llvm::StringRef(LocalScope).rtrim(':').str());
+
+	if (NamespaceScope && !NamespaceScope->empty())
+		output.paragraph().text("Namespace: " + llvm::StringRef(*NamespaceScope).rtrim(':').str());
+
+	if (!AccessSpecifier.empty())
+		output.paragraph().text("Access Specifier: " + AccessSpecifier);
+
+	output.line();
+	// MARK: - Test end
+
+	if (CalleeArgInfo)
+	{
+		assert(CallPassType);
+
+		auto& paragraph = output.paragraph();
+
+		paragraph
+			.text("Passing")
+			.space()
+			.code(Name)
+			.space();
+
+		if (CallPassType->PassBy != HoverInfo::PassType::Value)
+		{
+			paragraph
+				.text("by")
+				.space();
+
+			if (CallPassType->PassBy == HoverInfo::PassType::ConstRef)
+			{
+				paragraph
+					.text("const")
+					.bold()
+					.italic()
+					.space();
+			}
+
+			paragraph
+				.text("reference")
+				.bold()
+				.italic()
+				.space();
+		}
+
+		if (CalleeArgInfo->Name)
+		{
+			paragraph
+				.text("into")
+				.space()
+				.code(*(CalleeArgInfo->Name))
+				.space();
+		}
+		else if (CallPassType->PassBy == HoverInfo::PassType::Value)
+		{
+			paragraph
+				.text("by")
+				.space()
+				.text("value")
+				.italic()
+				.space();
+		}
+
+		if (CallPassType->Converted && CalleeArgInfo->Type)
+		{
+			paragraph
+				.text("(converted to")
+				.space()
+				.code(CalleeArgInfo->Type->Type)
+				.text(")");
+		}
+	}
+
+	/* Parse and build out Doxygen content */
 	if (!Documentation.empty())
 	{
-		c32::parseDoxygenTags(this, Documentation, output);
+		auto parsed = c32::doxygen::parse(*this);
+
+		if (index::SymbolKind::Parameter == symbolKind)
+		{
+		}
+
+		/* Append the brief/description */
+		if (!parsed.brief.empty())
+		{
+			output.paragraph()
+				.text(parsed.brief);
+		}
+
+		/* Append untagged user lines */
+		if (!parsed.untaggedLines.empty())
+		{
+			auto& paragraph = output.paragraph();
+
+			for (const auto& line : parsed.untaggedLines)
+			{
+				paragraph
+					.text(line)
+					.blankline();
+			}
+		}
+
+		/* Thick divider between the hover's heading with signature+brief and the rest */
+		output.line(/* Thickness */ 4U);
+
+		/* Append all warning tags */
+		if (!parsed.warnings.empty())
+		{
+			output.heading(2U).text("⚠️ Warning");
+
+			auto& list = output.list().compact();
+
+			for (const auto& warning : parsed.warnings)
+			{
+				list.item()
+					.text(warning)
+					.italic();
+			}
+		}
+
+		/* Append deprecated warning */
+		if (!parsed.deprecated.empty())
+		{
+			output.heading(3U)
+				.text("Deprecated")
+				.strikethrough();
+
+			output.paragraph()
+				.text(parsed.deprecated);
+		}
+
+		/* Append a thick divider to separate warnings from the rest of the content */
+		if (!parsed.warnings.empty() || !parsed.deprecated.empty())
+		{
+			output.line(/* Thickness */ 4U);
+		}
+
+		/* Append function parameters */
+		if (!parsed.parameters.empty())
+		{
+			output.line();
+
+			output.heading(3U).text("Parameters");
+
+			for (const auto& param : parsed.parameters)
+			{
+				auto& paragraph = output.paragraph();
+
+				if (c32::doxygen::ParameterTag::Specifier::None != param.specifiers)
+				{
+					paragraph
+						.code(std::to_string(param.specifiers))
+						.space();
+				}
+
+				paragraph
+					.code(param.name)
+					.space()
+					.text("→")
+					.space()
+					.text(param.description);
+			}
+		}
+
+		/* Append the return type description */
+		if (!parsed.returns.empty())
+		{
+			output.line();
+
+			output.heading(3U).text("Returns");
+			output.paragraph().text(parsed.returns);
+		}
+
+		/* Append the collected @retval/@result tags */
+		if (!parsed.retvals.empty())
+		{
+			/* Add the 'Returns' heading if the user didn't specify a @returns tag */
+			if (parsed.returns.empty())
+			{
+				output.line();
+				output.heading(3U).text("Returns");
+			}
+
+			auto& list = output.list();
+
+			for (const auto& [key, val] : llvm::reverse(parsed.retvals))
+			{
+				auto& item = list.item();
+
+				item
+					.code(key)
+					.bold();
+
+				if (!val.empty())
+				{
+					item
+						.space()
+						.text("→")
+						.space()
+						.text(val);
+				}
+			}
+		}
+
+		/* Append custom Doxygen tags that we don't intercept */
+		if (!parsed.customTags.empty())
+		{
+			output.line();
+
+			for (const auto& customTag : parsed.customTags)
+			{
+				output
+					.heading(3U)
+					.text(customTag.name);
+
+				output
+					.paragraph()
+					.text(customTag.body);
+			}
+		}
+
+		/* Append any examples */
+		if (!parsed.examples.empty())
+		{
+			output.line();
+
+			for (const auto& exp : parsed.examples)
+			{
+				output
+					.heading(3U)
+					.text("Example");
+
+				output.paragraph()
+					.text("{")
+					.bold();
+
+				output.codeBlock(exp.lang, c32::indentLines(exp.code));
+
+				output.paragraph()
+					.text("}")
+					.bold();
+			}
+		}
 	}
 
-	if (!UsedSymbolNames.empty())
+	/* Build out the enum values */
+	if (index::SymbolKind::Enum == symbolKind)
 	{
-		output.addRuler();
-
-		markup::Paragraph& P = output.addParagraph();
-
-		P.appendText("provides ");
-
-		const std::vector<std::string>::size_type SymbolNamesLimit = 5;
-		auto Front												   = llvm::ArrayRef(UsedSymbolNames).take_front(SymbolNamesLimit);
-
-		llvm::interleave(Front, [&](llvm::StringRef Sym) { P.appendCode(Sym); }, [&] { P.appendText(", "); });
-		if (UsedSymbolNames.size() > Front.size())
+		if (const auto& Members = EnumMembers)
 		{
-			P.appendText(" and ");
-			P.appendText(std::to_string(UsedSymbolNames.size() - Front.size()));
-			P.appendText(" more");
+			output.line(/* Thickness */ 4U);
+
+			output.heading(3U).text("Values");
+
+			auto& list = output.list();
+
+			for (const auto& member : *Members)
+			{
+				list
+					.item()
+					.code(member.Name)
+					.space()
+					.text("=")
+					.space()
+					.code(member.Value);
+			}
 		}
+	}
+
+	/* List symbols provided by the header when hovering over `#include` directives */
+	if (!ProvidedSymbols.empty())
+	{
+		output
+			.line();
+
+		output
+			.heading(4U)
+			.text("Provides");
+
+		auto& list = output.list();
+
+		auto symbols = llvm::ArrayRef(ProvidedSymbols).take_front(20U);
+
+		for (const auto& sym : symbols)
+		{
+			std::string kind = std::to_string(sym.Kind);
+
+			if (const auto& type = sym.Type)
+				kind = (*type).Type;
+
+			list
+				.item()
+				.code(sym.Name + (sym.isFunction() ? "()" : ""))
+				.bold()
+				.space()
+				.text("of type")
+				.italic()
+				.space()
+				.code(kind);
+		}
+
+		if (ProvidedSymbols.size() > symbols.size())
+			list.item().text("+" + std::to_string(ProvidedSymbols.size() - symbols.size()) + " more");
 	}
 
 	return output;
@@ -1844,7 +2283,7 @@ getBacktickQuoteRange(llvm::StringRef Line, unsigned Offset)
 	assert(Line[Offset] == '`');
 
 	// The open-quote is usually preceded by whitespace.
-	llvm::StringRef Prefix						   = Line.substr(0, Offset);
+	llvm::StringRef				  Prefix		   = Line.substr(0, Offset);
 	constexpr llvm::StringLiteral BeforeStartChars = " \t(=";
 	if (!Prefix.empty() && !BeforeStartChars.contains(Prefix.back()))
 		return std::nullopt;
@@ -1859,12 +2298,58 @@ getBacktickQuoteRange(llvm::StringRef Line, unsigned Offset)
 		return std::nullopt;
 
 	// The close-quote is usually followed by whitespace or punctuation.
-	llvm::StringRef Suffix						= Line.substr(Next + 1);
+	llvm::StringRef				  Suffix		= Line.substr(Next + 1);
 	constexpr llvm::StringLiteral AfterEndChars = " \t)=.,;:";
 	if (!Suffix.empty() && !AfterEndChars.contains(Suffix.front()))
 		return std::nullopt;
 
 	return Line.slice(Offset, Next + 1);
+}
+
+bool
+isParagraphBreak(llvm::StringRef Rest)
+{
+	return Rest.ltrim(" \t").starts_with("\n");
+}
+
+bool
+punctuationIndicatesLineBreak(llvm::StringRef Line)
+{
+	constexpr llvm::StringLiteral Punctuation = R"txt(.:,;!?)txt";
+
+	Line = Line.rtrim();
+	return !Line.empty() && Punctuation.contains(Line.back());
+}
+
+bool
+isHardLineBreakIndicator(llvm::StringRef Rest)
+{
+	// '-'/'*' md list, '@'/'\' documentation command, '>' md
+	// blockquote,
+	// '#' headings, '`' code blocks
+	constexpr llvm::StringLiteral LinebreakIndicators = R"txt(-*@\>#`)txt";
+
+	Rest = Rest.ltrim(" \t");
+	if (Rest.empty())
+		return false;
+
+	if (LinebreakIndicators.contains(Rest.front()))
+		return true;
+
+	if (llvm::isDigit(Rest.front()))
+	{
+		llvm::StringRef AfterDigit = Rest.drop_while(llvm::isDigit);
+		if (AfterDigit.starts_with(".") || AfterDigit.starts_with(")"))
+			return true;
+	}
+	return false;
+}
+
+bool
+isHardLineBreakAfter(llvm::StringRef Line, llvm::StringRef Rest)
+{
+	// Should we also consider whether Line is short?
+	return punctuationIndicatesLineBreak(Line) || isHardLineBreakIndicator(Rest);
 }
 
 void
@@ -1876,7 +2361,7 @@ parseDocumentationLine(llvm::StringRef Line, markup::Paragraph& Out)
 		Line = Line.drop_front(strlen("@param")).ltrim();
 
 		// Parse [in], [out], [in,out], etc. (optional)
-		std::vector<std::string> directions;
+		std::vector<std::string>	directions;
 		std::map<std::string, bool> isOptional;
 
 		if (Line.starts_with("["))
@@ -1910,7 +2395,7 @@ parseDocumentationLine(llvm::StringRef Line, markup::Paragraph& Out)
 		}
 
 		// The next word is the parameter name
-		auto FirstSpace = Line.find(' ');
+		auto		FirstSpace = Line.find(' ');
 		std::string ParamName;
 		std::string Description;
 

@@ -11,8 +11,10 @@
 
 #include "ParsedAST.h"
 #include "Protocol.h"
+#include "c32-doxygen/Markdown.hpp"
 #include "support/Markup.h"
 #include "clang/Index/IndexSymbol.h"
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -38,6 +40,55 @@ struct HoverInfo
 
 		/// Desugared type
 		std::optional<std::string> AKA;
+	};
+
+	struct UsedSymbol
+	{
+		index::SymbolKind Kind;
+		std::string		  Name;
+
+		/// Set for variables only
+		std::optional<PrintedType> Type;
+
+		inline bool
+		isFunction() const
+		{
+			switch (Kind)
+			{
+				case index::SymbolKind::Function:
+				case index::SymbolKind::InstanceMethod:
+				case index::SymbolKind::ClassMethod:
+				case index::SymbolKind::StaticMethod:
+				case index::SymbolKind::Constructor:
+				case index::SymbolKind::Destructor:
+				case index::SymbolKind::ConversionFunction:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		friend bool
+		operator<(const UsedSymbol& LHS, const UsedSymbol& RHS)
+		{
+			if (LHS.Kind != RHS.Kind)
+				return LHS.Kind < RHS.Kind;
+
+			return LHS.Name < RHS.Name;
+		}
+
+		friend bool
+		operator==(const UsedSymbol& LHS, const UsedSymbol& RHS)
+		{
+			return LHS.Kind == RHS.Kind && LHS.Name == RHS.Name;
+		}
+	};
+
+	struct EnumMember
+	{
+		std::string Name;
+		std::string Value;
+		std::string Expr;
 	};
 
 	/// Represents parameters of a function, a template or a macro.
@@ -86,6 +137,9 @@ struct HoverInfo
 
 	index::SymbolKind Kind = index::SymbolKind::Unknown;
 
+	/// When `Kind` is `SymbolKind::TypeAlias` this reflects the real type.
+	std::optional<index::SymbolKind> UnderlyingKind;
+
 	std::string Documentation;
 
 	/// Source code containing the definition of the symbol.
@@ -109,6 +163,9 @@ struct HoverInfo
 
 	/// Set for all templates(function, class, variable).
 	std::optional<std::vector<Param>> TemplateParameters;
+
+	/// Set for macros; expanded view of the macro
+	std::optional<std::string> Expanded;
 
 	/// Contains the evaluated value of the symbol if available.
 	std::optional<std::string> Value;
@@ -154,15 +211,26 @@ struct HoverInfo
 	// Set only if CalleeArgInfo is set.
 	std::optional<PassType> CallPassType;
 
-	// Filled when hovering over the #include line. Contains the names
-	// of symbols from a #include'd file that are used in the main file,
-	// sorted in alphabetical order.
-	std::vector<std::string> UsedSymbolNames;
+	std::optional<std::string> ParentEnumName;
+
+	std::optional<std::vector<EnumMember>> EnumMembers;
+
+	std::vector<UsedSymbol> ProvidedSymbols;
 
 	/// Produce a user-readable information.
-	markup::Document present() const;
+	c32::markdown::Document present() const;
 
-	markup::Document presentForVscode() const;
+	inline index::SymbolKind
+	concreteKind() const
+	{
+		if (index::SymbolKind::TypeAlias == Kind)
+		{
+			if (auto underlying = UnderlyingKind)
+				return *underlying;
+		}
+
+		return Kind;
+	}
 };
 
 inline bool
