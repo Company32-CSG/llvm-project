@@ -1,13 +1,9 @@
 #include "Doxygen.hpp"
 #include "Utils.hpp"
 
-#include "../CodeComplete.h"
-#include "../support/Markup.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 
-#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <string_view>
@@ -16,61 +12,56 @@
 namespace clang::clangd::c32::doxygen {
 
 const std::vector<DoxygenTag> TagList = {
-	{ TagType::Brief, false, "brief", "Summary of documented symbol." },
-	{ TagType::Deprecated, false, "deprecated", "Mark usage of the documented symbol as deprecated." },
-	{ TagType::Example, false, "example", "Example usage: @example[c] { ... }", { "usage" } },
-	{ TagType::Member, true, "member", "Reference a member of the current class or struct.", { "m" } },
-	{ TagType::P, true, "p", "Reference to a parameter defined by the @param tag.", { "pref" } },
-	{ TagType::Param, false, "param", "Function parameter. Supports [in], [out], [in,out,optional], etc." },
-	{ TagType::Ref, true, "ref", "Reference to a defined symbol.", { "r" } },
-	{ TagType::Returns, false, "returns", "Description of return value.", { "return" } },
-	{ TagType::Retval, false, "retval", "Description of a specific return value.", { "ret", "result" } },
-	{ TagType::Warning, false, "warning", "Provide a warning to anyone using the documented symbol." },
+	{ TagType::Brief, TagParsingFlags(false, true), "brief", "Summary of documented symbol." },
+	{ TagType::Code, TagParsingFlags(false, true, true), "code", "Marks the beginning of a code block." },
+	{ TagType::EndCode, TagParsingFlags(false, false), "endcode", "Marks the end of a code block." },
+	{ TagType::Deprecated, TagParsingFlags(false, false), "deprecated", "Mark usage of the documented symbol as deprecated." },
+	{ TagType::Example, TagParsingFlags(false, true), "example", "Example usage: @example[c] { ... }", { "usage" } },
+	{ TagType::Member, TagParsingFlags(true, false), "member", "Reference a member of the current class or struct.", { "m" } },
+	{ TagType::P, TagParsingFlags(true, false), "p", "Reference to a parameter defined by the @param tag.", { "pref" } },
+	{ TagType::Param, TagParsingFlags(false, false), "param", "Function parameter. Supports [in], [out], [in,out,optional], etc." },
+	{ TagType::Ref, TagParsingFlags(true, false), "ref", "Reference to a defined symbol.", { "r" } },
+	{ TagType::Returns, TagParsingFlags(false, false), "returns", "Description of return value.", { "return" } },
+	{ TagType::Retval, TagParsingFlags(false, false), "retval", "Description of a specific return value.", { "ret", "result" } },
+	{ TagType::Warning, TagParsingFlags(false, false), "warning", "Provide a warning to anyone using the documented symbol." },
 
-	{ TagType::Custom, false, "note", "Additional notes or commentary." },
-	{ TagType::Custom, false, "attention", "Highlights something that needs attention." },
-	{ TagType::Custom, false, "author", "Specifies the author of the code or documentation." },
-	{ TagType::Custom, false, "copyright", "Specifies copyright details." },
-	{ TagType::Custom, false, "date", "Specifies the date of the documentation or change." },
-	{ TagType::Custom, false, "details", "Provides detailed documentation following @brief." },
-	{ TagType::Custom, false, "exception", "Documents an exception that may be thrown." },
-	{ TagType::Custom, false, "ingroup", "Associates a symbol with a documentation group." },
-	{ TagType::Custom, false, "li", "Represents a list item inside @par or similar sections." },
-	{ TagType::Custom, false, "mainpage", "Specifies the main page content of the documentation." },
-	{ TagType::Custom, false, "name", "Sets the name of a group or section." },
-	{ TagType::Custom, false, "par", "Starts a paragraph block." },
-	{ TagType::Custom, false, "post", "Postcondition for a function or method." },
-	{ TagType::Custom, false, "pre", "Precondition for a function or method." },
-	{ TagType::Custom, false, "remark", "Provides an additional remark or observation." },
-	{ TagType::Custom, false, "remark", "Provides an additional remark or observation." },
-	{ TagType::Custom, false, "see", "Cross-reference to another documented entity." },
-	{ TagType::Custom, false, "since", "Documents when the symbol was added." },
-	{ TagType::Custom, false, "throws", "Documents an exception a function may throw." },
-	{ TagType::Custom, false, "todo", "Marks something that needs to be completed." },
-	{ TagType::Custom, false, "tparam", "Describes a template parameter.", { "templateparam" } },
-	{ TagType::Custom, false, "version", "Specifies version information." },
-	{ TagType::Custom, false, "section", "Defines a named documentation section." },
-	{ TagType::Custom, false, "subsection", "Defines a subsection inside a section." },
-	{ TagType::Custom, false, "code", "Marks the beginning of a code block." },
-	{ TagType::Custom, false, "endcode", "Marks the end of a code block." },
-	{ TagType::Custom, false, "verbatim", "Begins a raw text block." },
-	{ TagType::Custom, false, "endverbatim", "Ends a raw text block." },
-	{ TagType::Custom, false, "defgroup", "Defines a named documentation group." },
-	{ TagType::Custom, false, "addtogroup", "Adds symbols to an existing documentation group." },
-	{ TagType::Custom, false, "anchor", "Marks a location for cross-referencing." },
-	{ TagType::Custom, false, "link", "Starts an inline link to a documented symbol." },
-	{ TagType::Custom, false, "endlink", "Ends an inline link block." },
-	{ TagType::Custom, false, "htmlonly", "Section only rendered in HTML output." },
-	{ TagType::Custom, false, "endhtmlonly", "Ends HTML-only section." },
-	{ TagType::Custom, false, "latexonly", "Section only rendered in LaTeX output." },
-	{ TagType::Custom, false, "endlatexonly", "Ends LaTeX-only section." },
+	{ TagType::Custom, TagParsingFlags(false, true), "note", "Additional notes or commentary." },
+	{ TagType::Custom, TagParsingFlags(false, false), "attention", "Highlights something that needs attention." },
+	{ TagType::Custom, TagParsingFlags(false, false), "author", "Specifies the author of the code or documentation." },
+	{ TagType::Custom, TagParsingFlags(false, false), "copyright", "Specifies copyright details." },
+	{ TagType::Custom, TagParsingFlags(false, false), "date", "Specifies the date of the documentation or change." },
+	{ TagType::Custom, TagParsingFlags(false, true), "details", "Provides detailed documentation following @brief." },
+	{ TagType::Custom, TagParsingFlags(false, false), "exception", "Documents an exception that may be thrown." },
+	{ TagType::Custom, TagParsingFlags(false, false), "ingroup", "Associates a symbol with a documentation group." },
+	{ TagType::Custom, TagParsingFlags(false, false), "li", "Represents a list item inside @par or similar sections." },
+	{ TagType::Custom, TagParsingFlags(false, false), "mainpage", "Specifies the main page content of the documentation." },
+	{ TagType::Custom, TagParsingFlags(false, false), "name", "Sets the name of a group or section." },
+	{ TagType::Custom, TagParsingFlags(false, false), "par", "Starts a paragraph block." },
+	{ TagType::Custom, TagParsingFlags(false, false), "post", "Postcondition for a function or method." },
+	{ TagType::Custom, TagParsingFlags(false, false), "pre", "Precondition for a function or method." },
+	{ TagType::Custom, TagParsingFlags(false, true), "remark", "Provides an additional remark or observation." },
+	{ TagType::Custom, TagParsingFlags(false, false), "see", "Cross-reference to another documented entity." },
+	{ TagType::Custom, TagParsingFlags(false, false), "since", "Documents when the symbol was added." },
+	{ TagType::Custom, TagParsingFlags(false, false), "throws", "Documents an exception a function may throw." },
+	{ TagType::Custom, TagParsingFlags(false, false), "todo", "Marks something that needs to be completed." },
+	{ TagType::Custom, TagParsingFlags(false, false), "tparam", "Describes a template parameter.", { "templateparam" } },
+	{ TagType::Custom, TagParsingFlags(false, false), "version", "Specifies version information." },
+	{ TagType::Custom, TagParsingFlags(false, false), "section", "Defines a named documentation section." },
+	{ TagType::Custom, TagParsingFlags(false, false), "subsection", "Defines a subsection inside a section." },
+	{ TagType::Custom, TagParsingFlags(false, true), "verbatim", "Begins a raw text block." },
+	{ TagType::Custom, TagParsingFlags(false, false), "endverbatim", "Ends a raw text block." },
+	{ TagType::Custom, TagParsingFlags(false, false), "defgroup", "Defines a named documentation group." },
+	{ TagType::Custom, TagParsingFlags(false, false), "addtogroup", "Adds symbols to an existing documentation group." },
+	{ TagType::Custom, TagParsingFlags(false, false), "anchor", "Marks a location for cross-referencing." },
+	{ TagType::Custom, TagParsingFlags(false, false), "link", "Starts an inline link to a documented symbol." },
+	{ TagType::Custom, TagParsingFlags(false, false), "endlink", "Ends an inline link block." },
+	{ TagType::Custom, TagParsingFlags(false, false), "htmlonly", "Section only rendered in HTML output." },
+	{ TagType::Custom, TagParsingFlags(false, false), "endhtmlonly", "Ends HTML-only section." },
+	{ TagType::Custom, TagParsingFlags(false, false), "latexonly", "Section only rendered in LaTeX output." },
+	{ TagType::Custom, TagParsingFlags(false, false), "endlatexonly", "Ends LaTeX-only section." },
 };
 
-constexpr char TagInitiatorList[] = {
-	'@',
-	'\\',
-	'%'
-};
+constexpr char TagInitiatorList[] = { '@', '\\', '%' };
 
 /* ------------------------------------------------------------ */
 
@@ -96,11 +87,7 @@ getAllTagNames()
 	{
 		ret.push_back(tag.name);
 
-		ret.insert(
-			ret.end(),
-			tag.aliases.begin(),
-			tag.aliases.end()
-		);
+		ret.insert(ret.end(), tag.aliases.begin(), tag.aliases.end());
 	}
 
 	return ret;
@@ -269,6 +256,25 @@ getTag(std::string_view sv, size_t pos, TagContext context)
 	/* Advance past the tag initiator character */
 	pos += 1U;
 
+	/* Handle the ref initiator specially */
+	if ('%' == ret.initiator)
+	{
+		if (TagContext::Inline != context && TagContext::Any != context)
+			return std::nullopt;
+
+		/* Loop through and find the REF tag descriptor */
+		for (const auto& tag : TagList)
+		{
+			if (TagType::Ref == tag.type)
+				ret.tag = &tag;
+		}
+
+		ret.name	 = ret.tag->name;
+		ret.consumed = 1U;
+
+		return ret;
+	}
+
 	/* Advance past whitespace */
 
 	while (pos < sv.size() && std::isspace(static_cast<unsigned char>(sv[pos])))
@@ -281,7 +287,7 @@ getTag(std::string_view sv, size_t pos, TagContext context)
 			bool inlineOnly = (TagContext::Inline == context);
 			bool blockOnly	= (TagContext::Block == context);
 
-			if ((inlineOnly && !tag.isInline) || (blockOnly && tag.isInline))
+			if ((inlineOnly && !tag.flags.Inline) || (blockOnly && tag.flags.Inline))
 				continue;
 		}
 

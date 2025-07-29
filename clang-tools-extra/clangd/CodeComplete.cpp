@@ -358,7 +358,16 @@ removeFirstTemplateArg(llvm::StringRef Signature)
 // Others vary per candidate, so add() must be called for remaining candidates.
 struct CodeCompletionBuilder
 {
-	CodeCompletionBuilder(ASTContext* ASTCtx, const CompletionCandidate& C, CodeCompletionString* SemaCCS, llvm::ArrayRef<std::string> AccessibleScopes, const IncludeInserter& Includes, llvm::StringRef FileName, CodeCompletionContext::Kind ContextKind, const CodeCompleteOptions& Opts, bool IsUsingDeclaration, tok::TokenKind NextTokenKind)
+	CodeCompletionBuilder(ASTContext* ASTCtx,
+		const CompletionCandidate&	  C,
+		CodeCompletionString*		  SemaCCS,
+		llvm::ArrayRef<std::string>	  AccessibleScopes,
+		const IncludeInserter&		  Includes,
+		llvm::StringRef				  FileName,
+		CodeCompletionContext::Kind	  ContextKind,
+		const CodeCompleteOptions&	  Opts,
+		bool						  IsUsingDeclaration,
+		tok::TokenKind				  NextTokenKind)
 		: ASTCtx(ASTCtx), ArgumentLists(Opts.ArgumentLists), IsUsingDeclaration(IsUsingDeclaration), NextTokenKind(NextTokenKind)
 	{
 		Completion.Deprecated = true; // cleared by any non-deprecated overload.
@@ -385,8 +394,7 @@ struct CodeCompletionBuilder
 			{
 				Completion.FixIts.push_back(toTextEdit(FixIt, ASTCtx->getSourceManager(), ASTCtx->getLangOpts()));
 			}
-			llvm::sort(Completion.FixIts, [](const TextEdit& X, const TextEdit& Y)
-					   { return std::tie(X.range.start.line, X.range.start.character) < std::tie(Y.range.start.line, Y.range.start.character); });
+			llvm::sort(Completion.FixIts, [](const TextEdit& X, const TextEdit& Y) { return std::tie(X.range.start.line, X.range.start.character) < std::tie(Y.range.start.line, Y.range.start.character); });
 		}
 		if (C.IndexResult)
 		{
@@ -460,8 +468,7 @@ struct CodeCompletionBuilder
 					ToInclude.takeError());
 		}
 		// Prefer includes that do not need edits (i.e. already exist).
-		std::stable_partition(Completion.Includes.begin(), Completion.Includes.end(), [](const CodeCompletion::IncludeCandidate& I)
-							  { return !I.Insertion.has_value(); });
+		std::stable_partition(Completion.Includes.begin(), Completion.Includes.end(), [](const CodeCompletion::IncludeCandidate& I) { return !I.Insertion.has_value(); });
 	}
 
 	void
@@ -473,9 +480,13 @@ struct CodeCompletionBuilder
 		bool		  IsConcept = false;
 		if (C.SemaResult)
 		{
-			getSignature(*SemaCCS, &S.Signature, &S.SnippetSuffix, C.SemaResult->Kind, C.SemaResult->CursorKind,
-						 /*IncludeFunctionArguments=*/C.SemaResult->FunctionCanBeCall,
-						 /*RequiredQualifiers=*/&Completion.RequiredQualifier);
+			getSignature(*SemaCCS,
+				&S.Signature,
+				&S.SnippetSuffix,
+				C.SemaResult->Kind,
+				C.SemaResult->CursorKind,
+				/*IncludeFunctionArguments=*/C.SemaResult->FunctionCanBeCall,
+				/*RequiredQualifiers=*/&Completion.RequiredQualifier);
 			S.ReturnType = getReturnType(*SemaCCS);
 			if (C.SemaResult->Kind == CodeCompletionResult::RK_Declaration)
 				if (const auto* D = C.SemaResult->getDeclaration())
@@ -518,8 +529,9 @@ struct CodeCompletionBuilder
 			}
 			else if (C.SemaResult)
 			{
-				const auto DocComment = getDocComment(*ASTCtx, *C.SemaResult,
-													  /*CommentsFromHeaders=*/false);
+				const auto DocComment = getDocComment(*ASTCtx,
+					*C.SemaResult,
+					/*CommentsFromHeaders=*/false);
 				SetDoc(formatDocumentation(*SemaCCS, DocComment));
 			}
 		}
@@ -1058,8 +1070,11 @@ struct CompletionRecorder : public CodeCompleteConsumer
 	codeCompletionString(const CodeCompletionResult& R)
 	{
 		// CodeCompletionResult doesn't seem to be const-correct. We own it, anyway.
-		return const_cast<CodeCompletionResult&>(R).CreateCodeCompletionString(*CCSema, CCContext, *CCAllocator, CCTUInfo,
-																			   /*IncludeBriefComments=*/false);
+		return const_cast<CodeCompletionResult&>(R).CreateCodeCompletionString(*CCSema,
+			CCContext,
+			*CCAllocator,
+			CCTUInfo,
+			/*IncludeBriefComments=*/false);
 	}
 
 private:
@@ -1148,9 +1163,12 @@ public:
 				SigHelp.activeParameter = paramIndexForArg(Candidate, SigHelp.activeParameter);
 			}
 
-			const auto* CCS = Candidate.CreateSignatureString(CurrentArg, S, *Allocator, CCTUInfo,
-															  /*IncludeBriefComments=*/true,
-															  Braced);
+			const auto* CCS = Candidate.CreateSignatureString(CurrentArg,
+				S,
+				*Allocator,
+				CCTUInfo,
+				/*IncludeBriefComments=*/true,
+				Braced);
 			assert(CCS && "Expected the CodeCompletionString to be non-null");
 			ScoredSignatures.push_back(processOverloadCandidate(Candidate, *CCS, Candidate.getFunction() ? getDeclComment(S.getASTContext(), *Candidate.getFunction()) : ""));
 		}
@@ -1167,18 +1185,21 @@ public:
 					continue;
 				IndexRequest.IDs.insert(S.IDForDoc);
 			}
-			Index->lookup(IndexRequest, [&](const Symbol& S)
-						  {
+			Index->lookup(IndexRequest,
+				[&](const Symbol& S)
+				{
 					if (!S.Documentation.empty())
-						FetchedDocs[S.ID] = std::string(S.Documentation); });
+						FetchedDocs[S.ID] = std::string(S.Documentation);
+				});
 			vlog("SigHelp: requested docs for {0} symbols from the index, got {1} "
 				 "symbols with non-empty docs in the response",
-				 IndexRequest.IDs.size(),
-				 FetchedDocs.size());
+				IndexRequest.IDs.size(),
+				FetchedDocs.size());
 		}
 
-		llvm::sort(ScoredSignatures, [](const ScoredSignature& L, const ScoredSignature& R)
-				   {
+		llvm::sort(ScoredSignatures,
+			[](const ScoredSignature& L, const ScoredSignature& R)
+			{
 				// Ordering follows:
 				// - Less number of parameters is better.
 				// - Aggregate > Function > FunctionType > FunctionTemplate
@@ -1215,7 +1236,8 @@ public:
 				}
 				if (L.Signature.label.size() != R.Signature.label.size())
 					return L.Signature.label.size() < R.Signature.label.size();
-				return L.Signature.label < R.Signature.label; });
+				return L.Signature.label < R.Signature.label;
+			});
 
 		for (auto& SS : ScoredSignatures)
 		{
@@ -1565,11 +1587,9 @@ startAsyncFuzzyFind(const SymbolIndex& Index, const FuzzyFindRequest& Req)
 		{
 			trace::Span			Tracer("Async fuzzyFind");
 			SymbolSlab::Builder Syms;
-			bool				Incomplete = Index.fuzzyFind(Req, [&Syms](const Symbol& Sym)
-												 { Syms.insert(Sym); });
+			bool				Incomplete = Index.fuzzyFind(Req, [&Syms](const Symbol& Sym) { Syms.insert(Sym); });
 			return std::make_pair(Incomplete, std::move(Syms).build());
-		}
-	);
+		});
 }
 
 // Creates a `FuzzyFindRequest` based on the cached index request from the
@@ -1713,58 +1733,60 @@ public:
 		//   - completion results based on the AST.
 		//   - partial identifier and context. We need these for the index query.
 		CodeCompleteResult Output;
-		auto			   RecorderOwner = std::make_unique<CompletionRecorder>(Opts, [&]()
-																	{
-				assert(Recorder && "Recorder is not set");
-				CCContextKind		 = Recorder->CCContext.getKind();
-				IsUsingDeclaration	 = Recorder->CCContext.isUsingDeclaration();
-				auto Style			 = getFormatStyleForFile(SemaCCInput.FileName, SemaCCInput.ParseInput.Contents, *SemaCCInput.ParseInput.TFS, false);
-				const auto NextToken = findTokenAfterCompletionPoint(Recorder->CCSema->getPreprocessor().getCodeCompletionLoc(), Recorder->CCSema->getSourceManager(), Recorder->CCSema->LangOpts);
-				if (NextToken)
-					NextTokenKind = NextToken->getKind();
-				// If preprocessor was run, inclusions from preprocessor callback should
-				// already be added to Includes.
-				Inserter.emplace(SemaCCInput.FileName,
-					SemaCCInput.ParseInput.Contents,
-					Style,
-					SemaCCInput.ParseInput.CompileCommand.Directory,
-					&Recorder->CCSema->getPreprocessor().getHeaderSearchInfo(),
-					Config::current().Style.QuotedHeaders,
-					Config::current().Style.AngledHeaders);
-				for (const auto& Inc : Includes.MainFileIncludes)
-					Inserter->addExisting(Inc);
+		auto			   RecorderOwner = std::make_unique<CompletionRecorder>(Opts,
+			  [&]()
+			  {
+				  assert(Recorder && "Recorder is not set");
+				  CCContextKind		   = Recorder->CCContext.getKind();
+				  IsUsingDeclaration   = Recorder->CCContext.isUsingDeclaration();
+				  auto		 Style	   = getFormatStyleForFile(SemaCCInput.FileName, SemaCCInput.ParseInput.Contents, *SemaCCInput.ParseInput.TFS, false);
+				  const auto NextToken = findTokenAfterCompletionPoint(Recorder->CCSema->getPreprocessor().getCodeCompletionLoc(), Recorder->CCSema->getSourceManager(), Recorder->CCSema->LangOpts);
+				  if (NextToken)
+					  NextTokenKind = NextToken->getKind();
+				  // If preprocessor was run, inclusions from preprocessor callback should
+				  // already be added to Includes.
+				  Inserter.emplace(SemaCCInput.FileName,
+					  SemaCCInput.ParseInput.Contents,
+					  Style,
+					  SemaCCInput.ParseInput.CompileCommand.Directory,
+					  &Recorder->CCSema->getPreprocessor().getHeaderSearchInfo(),
+					  Config::current().Style.QuotedHeaders,
+					  Config::current().Style.AngledHeaders);
+				  for (const auto& Inc : Includes.MainFileIncludes)
+					  Inserter->addExisting(Inc);
 
-				// Most of the cost of file proximity is in initializing the FileDistance
-				// structures based on the observed includes, once per query. Conceptually
-				// that happens here (though the per-URI-scheme initialization is lazy).
-				// The per-result proximity scoring is (amortized) very cheap.
-				FileDistanceOptions ProxOpts{}; // Use defaults.
-				const auto& SM = Recorder->CCSema->getSourceManager();
-				llvm::StringMap<SourceParams> ProxSources;
-				auto MainFileID = Includes.getID(SM.getFileEntryForID(SM.getMainFileID()));
-				assert(MainFileID);
-				for (auto& HeaderIDAndDepth : Includes.includeDepth(*MainFileID))
-				{
-					auto& Source = ProxSources[Includes.getRealPath(HeaderIDAndDepth.getFirst())];
-					Source.Cost	 = HeaderIDAndDepth.getSecond() * ProxOpts.IncludeCost;
-					// Symbols near our transitive includes are good, but only consider
-					// things in the same directory or below it. Otherwise there can be
-					// many false positives.
-					if (HeaderIDAndDepth.getSecond() > 0)
-						Source.MaxUpTraversals = 1;
-				}
-				FileProximity.emplace(ProxSources, ProxOpts);
+				  // Most of the cost of file proximity is in initializing the FileDistance
+				  // structures based on the observed includes, once per query. Conceptually
+				  // that happens here (though the per-URI-scheme initialization is lazy).
+				  // The per-result proximity scoring is (amortized) very cheap.
+				  FileDistanceOptions			ProxOpts{}; // Use defaults.
+				  const auto&					SM = Recorder->CCSema->getSourceManager();
+				  llvm::StringMap<SourceParams> ProxSources;
+				  auto							MainFileID = Includes.getID(SM.getFileEntryForID(SM.getMainFileID()));
+				  assert(MainFileID);
+				  for (auto& HeaderIDAndDepth : Includes.includeDepth(*MainFileID))
+				  {
+					  auto& Source = ProxSources[Includes.getRealPath(HeaderIDAndDepth.getFirst())];
+					  Source.Cost  = HeaderIDAndDepth.getSecond() * ProxOpts.IncludeCost;
+					  // Symbols near our transitive includes are good, but only consider
+					  // things in the same directory or below it. Otherwise there can be
+					  // many false positives.
+					  if (HeaderIDAndDepth.getSecond() > 0)
+						  Source.MaxUpTraversals = 1;
+				  }
+				  FileProximity.emplace(ProxSources, ProxOpts);
 
-				Output = runWithSema();
-				Inserter.reset(); // Make sure this doesn't out-live Clang.
-				SPAN_ATTACH(Tracer, "sema_completion_kind", getCompletionKindString(CCContextKind));
-				log("Code complete: sema context {0}, query scopes [{1}] (AnyScope={2}), "
-					"expected type {3}{4}",
-					getCompletionKindString(CCContextKind),
-					llvm::join(QueryScopes.begin(), QueryScopes.end(), ","),
-					AllScopes,
-					PreferredType ? Recorder->CCContext.getPreferredType().getAsString() : "<none>",
-					IsUsingDeclaration ? ", inside using declaration" : ""); });
+				  Output = runWithSema();
+				  Inserter.reset(); // Make sure this doesn't out-live Clang.
+				  SPAN_ATTACH(Tracer, "sema_completion_kind", getCompletionKindString(CCContextKind));
+				  log("Code complete: sema context {0}, query scopes [{1}] (AnyScope={2}), "
+								  "expected type {3}{4}",
+					  getCompletionKindString(CCContextKind),
+					  llvm::join(QueryScopes.begin(), QueryScopes.end(), ","),
+					  AllScopes,
+					  PreferredType ? Recorder->CCContext.getPreferredType().getAsString() : "<none>",
+					  IsUsingDeclaration ? ", inside using declaration" : "");
+			  });
 
 		Recorder = RecorderOwner.get();
 
@@ -1815,11 +1837,13 @@ public:
 
 		auto Style = getFormatStyleForFile(FileName, Content, TFS, false);
 		// This will only insert verbatim headers.
-		Inserter.emplace(FileName, Content, Style,
-						 /*BuildDir=*/"",
-						 /*HeaderSearchInfo=*/nullptr,
-						 Config::current().Style.QuotedHeaders,
-						 Config::current().Style.AngledHeaders);
+		Inserter.emplace(FileName,
+			Content,
+			Style,
+			/*BuildDir=*/"",
+			/*HeaderSearchInfo=*/nullptr,
+			Config::current().Style.QuotedHeaders,
+			Config::current().Style.AngledHeaders);
 
 		auto					   Identifiers = collectIdentifiers(Content, Style);
 		std::vector<RawIdentifier> IdentifierResults;
@@ -1860,8 +1884,7 @@ public:
 		SymbolSlab IndexResults = Opts.Index ? queryIndex() : SymbolSlab();
 
 		CodeCompleteResult Output = toCodeCompleteResult(mergeResults(
-			/*SemaResults=*/{}, IndexResults, IdentifierResults
-		));
+			/*SemaResults=*/{}, IndexResults, IdentifierResults));
 		Output.RanParser		  = false;
 		logResults(Output, Tracer);
 		return Output;
@@ -1965,13 +1988,15 @@ private:
 		// Look up documentation from the index.
 		if (Opts.Index)
 		{
-			Opts.Index->lookup(Req, [&](const Symbol& S)
-							   {
+			Opts.Index->lookup(Req,
+				[&](const Symbol& S)
+				{
 					if (S.Documentation.empty())
 						return;
 					auto& C = Output.Completions[SymbolToCompletion.at(S.ID)];
 					C.Documentation.emplace();
-					parseDocumentation(S.Documentation, *C.Documentation); });
+					parseDocumentation(S.Documentation, *C.Documentation);
+				});
 		}
 
 		return Output;
@@ -2015,8 +2040,7 @@ private:
 
 		// Run the query against the index.
 		SymbolSlab::Builder ResultsBuilder;
-		Incomplete |= Opts.Index->fuzzyFind(Req, [&](const Symbol& Sym)
-											{ ResultsBuilder.insert(Sym); });
+		Incomplete |= Opts.Index->fuzzyFind(Req, [&](const Symbol& Sym) { ResultsBuilder.insert(Sym); });
 		return std::move(ResultsBuilder).build();
 	}
 
@@ -2274,14 +2298,7 @@ guessCompletionPrefix(llvm::StringRef Content, unsigned Offset)
 }
 
 CodeCompleteResult
-codeComplete(
-	PathRef				  FileName,
-	Position			  Pos,
-	const PreambleData*	  Preamble,
-	const ParseInputs&	  ParseInput,
-	CodeCompleteOptions	  Opts,
-	SpeculativeFuzzyFind* SpecFuzzyFind
-)
+codeComplete(PathRef FileName, Position Pos, const PreambleData* Preamble, const ParseInputs& ParseInput, CodeCompleteOptions Opts, SpeculativeFuzzyFind* SpecFuzzyFind)
 {
 	auto Offset = positionToOffset(ParseInput.Contents, Pos);
 	if (!Offset)
@@ -2315,8 +2332,6 @@ codeComplete(
 			}
 		}
 
-		llvm::errs() << ">>>>>>>>>>>>>>>>>>>>> codeComplete(): In doxygen comment!\n";
-
 		c32::doxygen::CodeCompleteArgs Ctx{
 			FileName,
 			ParseInput,
@@ -2325,24 +2340,21 @@ codeComplete(
 			SpecFuzzyFind,
 			Content,
 			*Offset,
-			ASTPtr
+			ASTPtr,
 		};
 
-		auto r = c32::doxygen::completion(Ctx);
-
-		llvm::errs() << ">>>>>>>>>>>>>>>>>>>>> codeComplete(): c32::doxygen::completion() returned " << r.Completions.size() << " results\n";
-
-		return r;
+		return c32::doxygen::completion(Ctx);
 	}
 
 	auto Flow = CodeCompleteFlow(FileName, Preamble ? Preamble->Includes : IncludeStructure(), SpecFuzzyFind, Opts);
 
-	return (!Preamble || Opts.RunParser == CodeCompleteOptions::NeverParse)
-		? std::move(Flow).runWithoutSema(ParseInput.Contents, *Offset, *ParseInput.TFS)
-		: std::move(Flow).run({ FileName, *Offset, *Preamble,
-								/*PreamblePatch=*/
-								PreamblePatch::createMacroPatch(FileName, ParseInput, *Preamble),
-								ParseInput });
+	return (!Preamble || Opts.RunParser == CodeCompleteOptions::NeverParse) ? std::move(Flow).runWithoutSema(ParseInput.Contents, *Offset, *ParseInput.TFS)
+																			: std::move(Flow).run({ FileName,
+																				  *Offset,
+																				  *Preamble,
+																				  /*PreamblePatch=*/
+																				  PreamblePatch::createMacroPatch(FileName, ParseInput, *Preamble),
+																				  ParseInput });
 }
 
 SignatureHelp
@@ -2360,15 +2372,9 @@ signatureHelp(PathRef FileName, Position Pos, const PreambleData& Preamble, cons
 	Options.IncludeMacros		 = false;
 	Options.IncludeCodePatterns	 = false;
 	Options.IncludeBriefComments = false;
-	semaCodeComplete(
-		std::make_unique<SignatureHelpCollector>(Options, DocumentationFormat, ParseInput.Index, Result),
+	semaCodeComplete(std::make_unique<SignatureHelpCollector>(Options, DocumentationFormat, ParseInput.Index, Result),
 		Options,
-		{ FileName,
-		  *Offset,
-		  Preamble,
-		  PreamblePatch::createFullPatch(FileName, ParseInput, Preamble),
-		  ParseInput }
-	);
+		{ FileName, *Offset, Preamble, PreamblePatch::createFullPatch(FileName, ParseInput, Preamble), ParseInput });
 	return Result;
 }
 
@@ -2537,31 +2543,17 @@ allowImplicitCompletion(llvm::StringRef Content, unsigned Offset)
 }
 
 CodeCompleteResult
-codeCompleteFlowHook(
-	PathRef				  FileName,
-	size_t				  Offset,
-	const PreambleData*	  Preamble,
-	const ParseInputs&	  ParseInput,
-	CodeCompleteOptions	  Opts,
-	SpeculativeFuzzyFind* SpecFuzzyFind,
-	std::string_view	  PatchedContents
-)
+codeCompleteFlowHook(PathRef FileName, size_t Offset, const PreambleData* Preamble, const ParseInputs& ParseInput, CodeCompleteOptions Opts, SpeculativeFuzzyFind* SpecFuzzyFind, std::string_view PatchedContents)
 {
-	CodeCompleteFlow Flow(
-		FileName,
-		Preamble ? Preamble->Includes : IncludeStructure(),
-		SpecFuzzyFind,
-		Opts
-	);
+	CodeCompleteFlow Flow(FileName, Preamble ? Preamble->Includes : IncludeStructure(), SpecFuzzyFind, Opts);
 
 	ParseInputs ParseInputPatch = ParseInput;
 	ParseInputPatch.Contents	= PatchedContents;
 
 	auto Patch = PreamblePatch::createFullPatch(FileName, ParseInputPatch, *Preamble);
 
-	return (!Preamble || Opts.RunParser == CodeCompleteOptions::NeverParse)
-		? std::move(Flow).runWithoutSema(ParseInputPatch.Contents, Offset, *ParseInputPatch.TFS)
-		: std::move(Flow).run({ FileName, Offset, *Preamble, Patch, ParseInputPatch });
+	return (!Preamble || Opts.RunParser == CodeCompleteOptions::NeverParse) ? std::move(Flow).runWithoutSema(ParseInputPatch.Contents, Offset, *ParseInputPatch.TFS)
+																			: std::move(Flow).run({ FileName, Offset, *Preamble, Patch, ParseInputPatch });
 }
 
 } // namespace clangd

@@ -39,6 +39,12 @@ struct ParameterTag
 	std::optional<std::string> typeAka;
 };
 
+struct CodeTag
+{
+	std::string lang;
+	std::string code;
+};
+
 struct ExampleTag
 {
 	std::string lang;
@@ -77,6 +83,9 @@ struct ParsedDoxygen
 
 	/// Parsed from `^@example`
 	std::vector<ExampleTag> examples;
+
+	/// Parsed from `^@code` ... `^@endcode`
+	std::vector<CodeTag> codeBlocks;
 };
 
 ParsedDoxygen parse(const HoverInfo& info);
