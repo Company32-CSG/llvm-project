@@ -157,11 +157,17 @@ to_string(clang::clangd::c32::doxygen::TagType value)
 		case TagType::Brief:
 			return "Brief";
 
+		case TagType::Code:
+			return "Code";
+
 		case TagType::Custom:
 			return "Custom";
 
 		case TagType::Deprecated:
 			return "Deprecated";
+
+		case TagType::EndCode:
+			return "EndCode";
 
 		case TagType::Example:
 			return "Example";

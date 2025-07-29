@@ -119,7 +119,6 @@ add_clang_library(clangDaemon STATIC
   c32-doxygen/Doxygen.cpp
   c32-doxygen/DoxygenParser.cpp
   c32-doxygen/DoxygenCompletion.cpp
-  c32-doxygen/HoverPresenter.cpp
   c32-doxygen/Utils.cpp
 
   index/Background.cpp

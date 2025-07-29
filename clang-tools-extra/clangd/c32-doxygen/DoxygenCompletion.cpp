@@ -35,31 +35,6 @@ enum class ContextKind
 	None
 };
 
-const char*
-to_string(ContextKind value)
-{
-	switch (value)
-	{
-		case ContextKind::Tag:
-			return "Tag";
-
-		case ContextKind::ParamName:
-			return "ParamName";
-
-		case ContextKind::ParamAttr:
-			return "ParamAttr";
-
-		case ContextKind::Reference:
-			return "Reference";
-
-		case ContextKind::None:
-			return "None";
-
-		default:
-			llvm_unreachable("Unknown ContextKind value");
-	}
-}
-
 struct CompletionContext
 {
 	/// Specific context we need to provide completion for (tag, param name, etc.)
@@ -245,10 +220,7 @@ findOwningFunctionDecl(const ParsedAST* ast, size_t cursorOffset)
 				{
 					auto SR = RC->getSourceRange();
 
-					if (SR.isValid() &&
-						SM.isWrittenInSameFile(SR.getBegin(), cursorLoc) &&
-						cursorLoc >= SR.getBegin() &&
-						cursorLoc <= SR.getEnd())
+					if (SR.isValid() && SM.isWrittenInSameFile(SR.getBegin(), cursorLoc) && cursorLoc >= SR.getBegin() && cursorLoc <= SR.getEnd())
 					{
 						return FD;
 					}
@@ -281,11 +253,24 @@ buildContext(std::string_view contents, size_t cursorOffset)
 		return std::nullopt;
 
 	/// Check if \r cursorOffset is adjacent to the end of \r tagPos.
-	auto isTagAdjacent = [&, &tagPos = tagPos]()
+	auto isTagAdjacent = [&, &tagPos = tagPos, &initiator = initiator]()
 	{
 		bool   inSpace = false;
 		size_t nSpaces = 0U;
 
+		/* The '%' initiator for references doesn't allow ANY spaces */
+		if ('%' == initiator)
+		{
+			for (size_t i = tagPos; i < cursorOffset; i++)
+			{
+				if (isSpace(contents[i]))
+					return false;
+			}
+
+			return true;
+		}
+
+		/* Ensure there is only a single space after the tag and no spaces after the argument */
 		for (size_t i = tagPos; i < cursorOffset; i++)
 		{
 			const char c = contents[i];
@@ -489,10 +474,7 @@ completeTags(std::string_view contents, size_t cursorOffset, std::string_view pr
 {
 	CodeCompleteResult ret;
 
-	Range tokenRange = {
-		offsetToPosition(contents, tagPos),
-		offsetToPosition(contents, cursorOffset)
-	};
+	Range tokenRange = { offsetToPosition(contents, tagPos), offsetToPosition(contents, cursorOffset) };
 
 	/* No prefix typed by user: return all tags */
 	if (prefix.empty())
@@ -538,9 +520,7 @@ completeTags(std::string_view contents, size_t cursorOffset, std::string_view pr
 CodeCompleteResult
 completeParamAttrs(const CompletionContext& context, std::string_view contents)
 {
-	static constexpr const char* Candidates[] = {
-		"in", "out", "opt", "optional"
-	};
+	static constexpr const char* Candidates[] = { "in", "out", "opt", "optional" };
 
 	CodeCompleteResult ret;
 
@@ -559,10 +539,7 @@ completeParamAttrs(const CompletionContext& context, std::string_view contents)
 			c.FilterText = candidate;
 			c.Kind		 = CompletionItemKind::EnumMember;
 
-			c.CompletionTokenRange = {
-				offsetToPosition(contents, context.replaceBegin),
-				offsetToPosition(contents, context.replaceEnd)
-			};
+			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -585,10 +562,7 @@ completeParamAttrs(const CompletionContext& context, std::string_view contents)
 			c.FilterText = candidate;
 			c.Kind		 = CompletionItemKind::EnumMember;
 
-			c.CompletionTokenRange = {
-				offsetToPosition(contents, context.replaceBegin),
-				offsetToPosition(contents, context.replaceEnd)
-			};
+			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -631,10 +605,7 @@ completeParamNames(const CompletionContext& context, std::string_view contents, 
 			c.FilterText = name;
 			c.Kind		 = CompletionItemKind::Variable;
 
-			c.CompletionTokenRange = {
-				offsetToPosition(contents, context.replaceBegin),
-				offsetToPosition(contents, context.replaceEnd)
-			};
+			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -660,10 +631,7 @@ completeParamNames(const CompletionContext& context, std::string_view contents, 
 		c.FilterText = name;
 		c.Kind		 = CompletionItemKind::Variable;
 
-		c.CompletionTokenRange = {
-			offsetToPosition(contents, context.replaceBegin),
-			offsetToPosition(contents, context.replaceEnd)
-		};
+		c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
 
 		ret.Completions.push_back(std::move(c));
 	}
@@ -676,13 +644,8 @@ completeReferences(const CompletionContext& context, const CodeCompleteArgs& arg
 {
 	CodeCompleteResult ret;
 
-	llvm::errs() << ">>>>>>>>>>>>>>>>> completeReferences(): Enter\n";
-
 	if (!context.matchedTag && '%' != context.triggerCharacter)
-	{
-		llvm::errs() << ">>>>>>>>>>>>>>>>>> completeReferences(): No matched tag!\n";
 		return ret;
-	}
 
 	auto patchedContents = std::string(args.contents);
 
@@ -699,10 +662,7 @@ completeReferences(const CompletionContext& context, const CodeCompleteArgs& arg
 			return (a > b) ? (a) : (b);
 		};
 
-		size_t s1 = patchedContents.rfind("/**", args.offset),
-			   s2 = patchedContents.rfind("/*!", args.offset),
-			   s3 = patchedContents.rfind("///", args.offset),
-			   s4 = patchedContents.rfind("//!", args.offset);
+		size_t s1 = patchedContents.rfind("/**", args.offset), s2 = patchedContents.rfind("/*!", args.offset), s3 = patchedContents.rfind("///", args.offset), s4 = patchedContents.rfind("//!", args.offset);
 
 		return maxp(maxp(s1, s2), maxp(s3, s4));
 	};
@@ -718,7 +678,10 @@ completeReferences(const CompletionContext& context, const CodeCompleteArgs& arg
 			patchedContents[i] = ' ';
 	}
 
-	llvm::errs() << ">>>>>>>>>>>>>>>>>> completeReferences(): Patched: '" << patchedContents << "'\n";
+	if ('%' == context.triggerCharacter)
+	{
+		patchedContents[context.triggerPos] = ' ';
+	}
 
 	auto commentEnd = patchedContents.find("*/", args.offset);
 
@@ -852,13 +815,7 @@ completion(const CodeCompleteArgs& args)
 	auto context = buildContext(args.contents, args.offset);
 
 	if (!context)
-	{
-		llvm::errs() << ">>>>>>>>>>>>>>>>>>>>>>>>> completion(): No context!\n";
-
 		return empty;
-	}
-
-	llvm::errs() << ">>>>>>>>>>>>>>>>>>>>>>>>> completion(): Context Kind: " << to_string(context->kind) << "\n";
 
 	switch (context->kind)
 	{
@@ -879,7 +836,6 @@ completion(const CodeCompleteArgs& args)
 			return completeReferences(*context, args);
 
 		default:
-			llvm::errs() << ">>>>>>>>>>>>>>>>>>>>>>>>> completion(): Default context->kind case!\n";
 			return empty;
 	}
 }

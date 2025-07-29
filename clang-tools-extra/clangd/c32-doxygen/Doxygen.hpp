@@ -15,6 +15,12 @@ enum class TagType
 	/// Concrete type for `^@brief`
 	Brief,
 
+	/// Concrete type for `^@code` ... `^@endcode`
+	Code,
+
+	/// Concrete type for `^@code` ... `^@endcode`
+	EndCode,
+
 	/// Concrete type for `^@deprecated`
 	Deprecated,
 
@@ -58,15 +64,30 @@ enum class TagContext
 	Inline
 };
 
+struct TagParsingFlags
+{
+	/// Denotes whether the tag is meant to be parsed inline rather than its own section.
+	bool Inline : 1U;
+
+	/// The parser will continue to consume when line breaks (blank lines) are encountered.
+	bool AllowLineBreaks : 1U;
+
+	/// Indicates the parser should consume the following (terminating) tag too.
+	bool HasTerminatingTag : 1U;
+
+	TagParsingFlags(bool Inline = false, bool AllowLineBreaks = false, bool HasTerminatingTag = false)
+		: Inline(Inline), AllowLineBreaks(AllowLineBreaks), HasTerminatingTag(HasTerminatingTag) {}
+};
+
 struct DoxygenTag
 {
 	/// Concrete `TagType` identifier for this tag
 	TagType type;
 
-	/// Denotes whether the tag is meant to be parsed inline rather than its own section
-	bool isInline;
+	/// How to parse this tag
+	TagParsingFlags flags;
 
-	/// 'brief', 'example', 'param', etc.
+	/// `brief`, `example`, `param`, etc.
 	std::string_view name;
 
 	/// For completion documentation.

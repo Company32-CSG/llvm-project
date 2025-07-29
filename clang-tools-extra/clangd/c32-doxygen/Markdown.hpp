@@ -203,8 +203,8 @@ struct PlaintextRenderer : Renderer
  * optionally customize the font with functions like `bold()` and `italic()`.
  *
  * The example below will produce:
- * 		@md - `Markdown` **Example Text**
- * 		@md - `Plaintext` Example Text
+ * 		- `Markdown` **Example Text**
+ * 		- `Plaintext` Example Text
  *
  * @example[c] {
  * 		Document doc;
@@ -395,13 +395,13 @@ public:
  * of multiple `Block` based classes.
  *
  * The current types are:
- * @md - **`Document`**
- * @md - `Heading`
- * @md - `Paragraph`
- * @md - `List`
- * @md - `Table`
- * @md - `CodeBlock`
- * @md - `BlockQuote`
+ * - **`Document`**
+ * - `Heading`
+ * - `Paragraph`
+ * - `List`
+ * - `Table`
+ * - `CodeBlock`
+ * - `BlockQuote`
  */
 struct Block
 {
@@ -431,16 +431,11 @@ public:
 	void
 	render(Renderer& r) const override
 	{
-		r.emitBlankLine();
-
 		/// Emit our ATX heading (#)
 		r.emitHeader(mLevel);
 
 		/// Render the chunks for this heading
 		renderChunks(r);
-
-		/// Finish the heading with blank line to separate from other content
-		r.emitBlankLine();
 	}
 };
 
@@ -454,13 +449,13 @@ class Paragraph : public Block, public ChunkContainer<Paragraph>
 	void
 	render(Renderer& r) const override
 	{
-		r.emitBlankLine();
+		r.emitNewLine();
 
 		/// Render the chunks for this heading
 		renderChunks(r);
 
 		/// Finish the heading with blank line to separate from other content
-		r.emitBlankLine();
+		r.emitNewLine();
 	}
 };
 
@@ -637,7 +632,7 @@ public:
 	void
 	render(Renderer& r) const override
 	{
-		r.emitBlankLine();
+		r.emitNewLine();
 
 		for (size_t i = 1U; i <= mThickness; i++)
 		{
@@ -647,7 +642,7 @@ public:
 				r.emitNewLine();
 		}
 
-		r.emitBlankLine();
+		r.emitNewLine();
 	}
 };
 
@@ -668,6 +663,7 @@ public:
 	void
 	render(Renderer& r) const override
 	{
+		r.emitNewLine();
 		r.emitText("```" + std::string(mCodeLang));
 		r.emitNewLine();
 		r.emitText(mCodeBlock);
@@ -688,9 +684,13 @@ public:
 	void
 	render(Renderer& r) const override
 	{
+		r.emitNewLine();
+
 		r.emitText("> ");
 
 		renderChunks(r);
+
+		r.emitNewLine();
 	}
 };
 

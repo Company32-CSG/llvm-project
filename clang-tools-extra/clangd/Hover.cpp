@@ -47,6 +47,7 @@
 #include "clang/AST/Type.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/LLVM.h"
+#include "clang/Basic/LangStandard.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Specifiers.h"
@@ -116,8 +117,8 @@ getLocalScope(const Decl* D)
 			return declaredType(D).getAsString(Policy);
 		}
 
-		if (auto* RD = dyn_cast<RecordDecl>(D))
-			return ("(anonymous " + RD->getKindName() + ")").str();
+		// if (auto* RD = dyn_cast<RecordDecl>(D))
+		// 	return ("(anonymous " + RD->getKindName() + ")").str();
 
 		return std::string("");
 	};
@@ -1124,7 +1125,7 @@ getStringLiteralContents(const StringLiteral* SL, const PrintingPolicy& PP)
 {
 	HoverInfo HI;
 
-	HI.Name = "string-literal";
+	HI.Name = "\"" + SL->getString().str() + "\"";
 	HI.Size = (SL->getLength() + 1) * SL->getCharByteWidth() * 8;
 	HI.Type = SL->getType().getAsString(PP).c_str();
 
@@ -1170,19 +1171,24 @@ getHoverContents(const SelectionTree::Node* N, const Expr* E, ParsedAST& AST, co
 	}
 	else if (isLiteral(E))
 	{
-		// There's not much value in hovering over "42" and getting
-		// a hover card saying "42 is an int", similar for most
-		// other literals. However, if we have CalleeArgInfo, it's
-		// still useful to show it.
 		maybeAddCalleeArgInfo(N, HI.emplace(), PP);
+
 		if (HI->CalleeArgInfo)
 		{
-			// FIXME Might want to show the expression's value here
-			// instead? E.g. if the literal is in hex it might be
-			// useful to show the decimal value here.
-			HI->Name = "literal";
+			if (auto Val = printExprValue(E, AST.getASTContext()))
+			{
+				/* e.g., "42", "hello", "0x2A", etc. */
+				HI->Name = *Val;
+			}
+			else
+			{
+				/* Fallback */
+				HI->Name = "literal";
+			}
+
 			return HI;
 		}
+
 		return std::nullopt;
 	}
 
@@ -1524,20 +1530,13 @@ maybeAddProvidedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc, Pri
 
 	llvm::DenseSet<include_cleaner::Symbol> UsedSymbols;
 
-	include_cleaner::walkUsed(
-		AST.getLocalTopLevelDecls(),
-		collectMacroReferences(AST),
-		&AST.getPragmaIncludes(),
-		AST.getPreprocessor(),
-		[&](const include_cleaner::SymbolReference& Ref, llvm::ArrayRef<include_cleaner::Header> Providers)
-		{
+	include_cleaner::walkUsed(AST.getLocalTopLevelDecls(), collectMacroReferences(AST), &AST.getPragmaIncludes(), AST.getPreprocessor(), [&](const include_cleaner::SymbolReference& Ref, llvm::ArrayRef<include_cleaner::Header> Providers)
+							  {
 			if (Ref.RT != include_cleaner::RefType::Explicit || UsedSymbols.contains(Ref.Target))
 				return;
 
 			if (isPreferredProvider(Inc, Converted, Providers))
-				UsedSymbols.insert(Ref.Target);
-		}
-	);
+				UsedSymbols.insert(Ref.Target); });
 
 	for (const auto& usedSym : UsedSymbols)
 	{
@@ -1562,13 +1561,7 @@ maybeAddProvidedSymbols(ParsedAST& AST, HoverInfo& HI, const Inclusion& Inc, Pri
 		HI.ProvidedSymbols.push_back(std::move(symbol));
 	}
 
-	HI.ProvidedSymbols.erase(
-		std::unique(
-			HI.ProvidedSymbols.begin(),
-			HI.ProvidedSymbols.end()
-		),
-		HI.ProvidedSymbols.end()
-	);
+	HI.ProvidedSymbols.erase(std::unique(HI.ProvidedSymbols.begin(), HI.ProvidedSymbols.end()), HI.ProvidedSymbols.end());
 }
 
 } // namespace
@@ -1756,154 +1749,6 @@ formatOffset(uint64_t OffsetInBits)
 	return Offset;
 }
 
-#if 0
-
-markup::Document
-HoverInfo::present() const
-{
-	markup::Document Output;
-
-	if (!Definition.empty())
-	{
-		Output.addRuler();
-		std::string Buffer;
-
-		if (!Definition.empty())
-		{
-			// Append scope comment, dropping trailing "::".
-			// Note that we don't print anything for global namespace,
-			// to not annoy non-c++ projects or projects that are not
-			// making use of namespaces.
-			if (!LocalScope.empty())
-			{
-				// Container name, e.g. class, method, function.
-				// We might want to propagate some info about container
-				// type to print function foo, class X, method X::bar,
-				// etc.
-				Buffer += "// In " + llvm::StringRef(LocalScope).rtrim(':').str() + '\n';
-			}
-			else if (NamespaceScope && !NamespaceScope->empty())
-			{
-				Buffer += "// In namespace " + llvm::StringRef(*NamespaceScope).rtrim(':').str() + '\n';
-			}
-
-			if (!AccessSpecifier.empty())
-			{
-				Buffer += AccessSpecifier + ": ";
-			}
-
-			Buffer += Definition;
-		}
-
-		Output.addCodeBlock(Buffer, DefinitionLanguage);
-	}
-
-	if (!Provider.empty())
-	{
-		markup::Paragraph& DI = Output.addParagraph();
-		DI.appendText("provided by");
-		DI.appendSpace();
-		DI.appendCode(Provider);
-		Output.addRuler();
-	}
-
-	// Put a linebreak after header to increase readability.
-	Output.addRuler();
-	// Print Types on their own lines to reduce chances of getting
-	// line-wrapped by editor, as they might be long.
-
-	// if (Parameters && !Parameters->empty())
-	// {
-	// 	Output.addParagraph().appendText("Parameters: ");
-
-	// 	markup::BulletList& L = Output.addBulletList();
-	// 	for (const auto& Param : *Parameters)
-	// 		L.addItem().addParagraph().appendCode(llvm::to_string(Param));
-	// }
-
-	// Don't print Type after Parameters or ReturnType as this will just
-	// duplicate the information
-	// if (Type && !ReturnType && !Parameters)
-	// 	Output.addParagraph().appendText("Type:
-	// ").appendCode(llvm::to_string(*Type));
-
-	if (Value)
-	{
-		markup::Paragraph& P = Output.addParagraph();
-		P.appendText("Value = ");
-		P.appendCode(*Value);
-	}
-
-	if (Offset)
-		Output.addParagraph().appendText("Offset: " + formatOffset(*Offset));
-
-	if (Size)
-	{
-		auto& P = Output.addParagraph().appendText("Size: " + formatSize(*Size));
-		if (Padding && *Padding != 0)
-		{
-			P.appendText(llvm::formatv(" (+{0} padding)", formatSize(*Padding)).str());
-		}
-		if (Align)
-			P.appendText(", alignment " + formatSize(*Align));
-	}
-
-	if (CalleeArgInfo)
-	{
-		assert(CallPassType);
-		std::string				 Buffer;
-		llvm::raw_string_ostream OS(Buffer);
-		OS << "Passed ";
-		if (CallPassType->PassBy != HoverInfo::PassType::Value)
-		{
-			OS << "by ";
-			if (CallPassType->PassBy == HoverInfo::PassType::ConstRef)
-				OS << "const ";
-			OS << "reference ";
-		}
-		if (CalleeArgInfo->Name)
-			OS << "as " << CalleeArgInfo->Name;
-		else if (CallPassType->PassBy == HoverInfo::PassType::Value)
-			OS << "by value";
-		if (CallPassType->Converted && CalleeArgInfo->Type)
-			OS << " (converted to " << CalleeArgInfo->Type->Type << ")";
-		Output.addParagraph().appendText(OS.str());
-	}
-
-	// if (!Documentation.empty())
-	// 	parseDocumentation(Documentation, Output);
-
-	if (!Documentation.empty())
-		clang::clangd::c32::parseDoxygenTags(this, Documentation, Output);
-
-#if 0
-	if (!UsedSymbols.empty())
-	{
-		Output.addRuler();
-		markup::Paragraph& P = Output.addParagraph();
-		P.appendText("provides ");
-
-		const std::vector<std::string>::size_type SymbolNamesLimit = 5;
-		auto									  Front			   = llvm::ArrayRef(UsedSymbols).take_front(SymbolNamesLimit);
-
-		llvm::interleave(Front, [&](llvm::StringRef Sym)
-			{ P.appendCode(Sym); },
-			[&]
-			{ P.appendText(", "); });
-		if (UsedSymbols.size() > Front.size())
-		{
-			P.appendText(" and ");
-			P.appendText(std::to_string(UsedSymbols.size() - Front.size()));
-			P.appendText(" more");
-		}
-	}
-#endif
-
-	return Output;
-}
-
-#endif
-
 c32::markdown::Document
 HoverInfo::present() const
 {
@@ -1911,102 +1756,149 @@ HoverInfo::present() const
 
 	auto symbolKind = concreteKind();
 
-	/* Append the symbol's definition (e.g., 'c32::markdown::Document HoverInfo::presentC32Doxygen() const') */
-	if (!Definition.empty())
+	// MARK: - Helper Lambdas
+
+	auto maybeAddHoveringOver = [&]()
 	{
-		if (index::SymbolKind::EnumConstant == symbolKind)
-		{
-			std::string def = Definition;
+		if (index::SymbolKind::Unknown == symbolKind)
+			return;
 
-			if (const auto& val = Value)
-				def += " = " + *val;
+		if (!Config::current().C32.Hover.ShowHoveringOver)
+			return;
 
-			output.codeBlock(
-				DefinitionLanguage,
-				def
-			);
-
-			/* Thick divider between the 'KEY=n' definition and any doxygen */
-			output.line(/* Thickness */ 4U);
-		}
-		else
-		{
-			output.codeBlock(
-				DefinitionLanguage,
-				Definition
-			);
-		}
-	}
-
-	/* Append the header file that provides this symbol */
-	if (!Provider.empty())
-	{
-		output.blockQuote()
-			.text("Provided by:")
+		output.paragraph()
+			.text("Hovering Over:")
 			.italic()
 			.space()
-			.code(Provider)
-			.bold();
-	}
+			.code(std::to_string(symbolKind));
+	};
 
-	output.line();
-	output.heading(3U).text("Details");
-
-	if (Offset)
-		output.paragraph().text("Offset: " + formatOffset(*Offset));
-
-	if (Size)
+	auto maybeAddScopeAndProvider = [&]()
 	{
-		auto& P = output.paragraph().text("Size: " + formatSize(*Size));
+		if (Provider.empty() && LocalScope.empty() && (!NamespaceScope || NamespaceScope->empty()))
+			return;
 
-		if (Padding && *Padding != 0)
-			P.text(llvm::formatv(" (+{0} padding)", formatSize(*Padding)).str());
+		/* Append the header file that provides this symbol */
+		if (!Provider.empty() && Config::current().C32.Hover.ShowProvider)
+		{
+			output.blockQuote()
+				.text("Provided by:")
+				.italic()
+				.space()
+				.code(Provider);
+		}
 
-		if (Align)
-			P.text(", alignment " + formatSize(*Align));
-	}
+		if (!Config::current().C32.Hover.ShowScope)
+			return;
 
-	if (!LocalScope.empty())
-		output.paragraph().text("LocalScope: " + llvm::StringRef(LocalScope).rtrim(':').str());
+		if (NamespaceScope && !NamespaceScope->empty())
+		{
+			output.blockQuote()
+				.text("Namespace:")
+				.italic()
+				.space()
+				.code(llvm::StringRef(*(NamespaceScope)).rtrim(':').str());
+		}
 
-	if (NamespaceScope && !NamespaceScope->empty())
-		output.paragraph().text("Namespace: " + llvm::StringRef(*NamespaceScope).rtrim(':').str());
+		if (!LocalScope.empty())
+		{
+			output.blockQuote()
+				.text("Scope:")
+				.italic()
+				.space()
+				.code(llvm::StringRef(LocalScope).rtrim(':').str());
+		}
+	};
 
-	if (!AccessSpecifier.empty())
-		output.paragraph().text("Access Specifier: " + AccessSpecifier);
-
-	output.line();
-	// MARK: - Test end
-
-	if (CalleeArgInfo)
+	auto maybeAddSizeAndOffset = [&]()
 	{
-		assert(CallPassType);
+		if (!Offset && !Size)
+			return;
+
+		if (!Config::current().C32.Hover.ShowSizeAndOffset)
+			return;
+
+		std::string contextName = "Field";
+
+		if (index::SymbolKind::Class == symbolKind)
+			contextName = "Class";
+		else if (index::SymbolKind::Struct == symbolKind)
+			contextName = "Struct";
+
+		output.heading(4U)
+			.text(contextName + " Info");
+
+		auto& block = output.blockQuote();
+
+		if (Offset)
+		{
+			block
+				.text("Offset")
+				.italic()
+				.space()
+				.code(formatOffset(*Offset))
+				.newline();
+		}
+
+		if (Size)
+		{
+			block
+				.text("Size")
+				.italic()
+				.space()
+				.code(formatSize(*Size))
+				.newline();
+
+			if (Padding && 0U != *Padding)
+			{
+				block
+					.text("Padding")
+					.italic()
+					.space()
+					.code(llvm::formatv("+{0} padding", formatSize(*Padding)).str())
+					.newline();
+			}
+
+			if (Align)
+			{
+				block
+					.text("Alignment")
+					.italic()
+					.space()
+					.code(formatSize(*Align))
+					.newline();
+			}
+		}
+	};
+
+	auto maybeAddCalleeArgInfo = [&]()
+	{
+		if (!CalleeArgInfo || !CallPassType)
+			return;
+
+		if (!Config::current().C32.Hover.ShowCalleeInfo)
+			return;
 
 		auto& paragraph = output.paragraph();
 
-		paragraph
-			.text("Passing")
+		paragraph.text("Passing")
 			.space()
 			.code(Name)
 			.space();
 
 		if (CallPassType->PassBy != HoverInfo::PassType::Value)
 		{
-			paragraph
-				.text("by")
-				.space();
+			paragraph.text("by").space();
 
 			if (CallPassType->PassBy == HoverInfo::PassType::ConstRef)
 			{
-				paragraph
-					.text("const")
+				paragraph.text("const")
 					.bold()
 					.italic()
 					.space();
 			}
 
-			paragraph
-				.text("reference")
+			paragraph.text("reference")
 				.bold()
 				.italic()
 				.space();
@@ -2015,7 +1907,7 @@ HoverInfo::present() const
 		if (CalleeArgInfo->Name)
 		{
 			paragraph
-				.text("into")
+				.text("as")
 				.space()
 				.code(*(CalleeArgInfo->Name))
 				.space();
@@ -2038,17 +1930,10 @@ HoverInfo::present() const
 				.code(CalleeArgInfo->Type->Type)
 				.text(")");
 		}
-	}
+	};
 
-	/* Parse and build out Doxygen content */
-	if (!Documentation.empty())
+	auto addFullDoxygen = [&](c32::doxygen::ParsedDoxygen& parsed)
 	{
-		auto parsed = c32::doxygen::parse(*this);
-
-		if (index::SymbolKind::Parameter == symbolKind)
-		{
-		}
-
 		/* Append the brief/description */
 		if (!parsed.brief.empty())
 		{
@@ -2063,9 +1948,7 @@ HoverInfo::present() const
 
 			for (const auto& line : parsed.untaggedLines)
 			{
-				paragraph
-					.text(line)
-					.blankline();
+				paragraph.text(line).newline();
 			}
 		}
 
@@ -2081,21 +1964,16 @@ HoverInfo::present() const
 
 			for (const auto& warning : parsed.warnings)
 			{
-				list.item()
-					.text(warning)
-					.italic();
+				list.item().text(warning).italic();
 			}
 		}
 
 		/* Append deprecated warning */
 		if (!parsed.deprecated.empty())
 		{
-			output.heading(3U)
-				.text("Deprecated")
-				.strikethrough();
+			output.heading(3U).text("Deprecated").strikethrough();
 
-			output.paragraph()
-				.text(parsed.deprecated);
+			output.paragraph().text(parsed.deprecated);
 		}
 
 		/* Append a thick divider to separate warnings from the rest of the content */
@@ -2117,17 +1995,10 @@ HoverInfo::present() const
 
 				if (c32::doxygen::ParameterTag::Specifier::None != param.specifiers)
 				{
-					paragraph
-						.code(std::to_string(param.specifiers))
-						.space();
+					paragraph.code(std::to_string(param.specifiers)).space();
 				}
 
-				paragraph
-					.code(param.name)
-					.space()
-					.text("→")
-					.space()
-					.text(param.description);
+				paragraph.code(param.name).space().text("→").space().text(param.description);
 			}
 		}
 
@@ -2156,17 +2027,11 @@ HoverInfo::present() const
 			{
 				auto& item = list.item();
 
-				item
-					.code(key)
-					.bold();
+				item.code(key).bold();
 
 				if (!val.empty())
 				{
-					item
-						.space()
-						.text("→")
-						.space()
-						.text(val);
+					item.space().text("→").space().text(val);
 				}
 			}
 		}
@@ -2178,13 +2043,9 @@ HoverInfo::present() const
 
 			for (const auto& customTag : parsed.customTags)
 			{
-				output
-					.heading(3U)
-					.text(customTag.name);
+				output.heading(3U).text(customTag.name);
 
-				output
-					.paragraph()
-					.text(customTag.body);
+				output.paragraph().text(customTag.body);
 			}
 		}
 
@@ -2195,20 +2056,122 @@ HoverInfo::present() const
 
 			for (const auto& exp : parsed.examples)
 			{
-				output
-					.heading(3U)
-					.text("Example");
+				output.heading(3U).text("Example");
 
-				output.paragraph()
-					.text("{")
-					.bold();
+				output.paragraph().text("{").bold();
 
 				output.codeBlock(exp.lang, c32::indentLines(exp.code));
 
-				output.paragraph()
-					.text("}")
-					.bold();
+				output.paragraph().text("}").bold();
 			}
+		}
+
+		/* Append any code blocks */
+		if (!parsed.codeBlocks.empty())
+		{
+			output.line();
+
+			for (const auto& codeBlock : parsed.codeBlocks)
+			{
+				output.heading(3U).text("Code");
+
+				output.paragraph().text("{").bold();
+
+				output.codeBlock(codeBlock.lang, c32::indentLines(codeBlock.code));
+
+				output.paragraph().text("}").bold();
+			}
+		}
+	};
+
+	auto addParameterDoxygen = [&](c32::doxygen::ParsedDoxygen& parsed)
+	{
+		const c32::doxygen::ParameterTag* param = nullptr;
+
+		/* Find our matching parameter */
+		for (const auto& p : parsed.parameters)
+		{
+			if (p.name == Name)
+				param = &p;
+		}
+
+		/* No parameter documentation? Bail early */
+		if (nullptr == param)
+			return;
+
+		auto& paragraph = output.paragraph();
+
+		if (c32::doxygen::ParameterTag::Specifier::None != param->specifiers)
+		{
+			paragraph
+				.code(std::to_string(param->specifiers))
+				.space();
+		}
+
+		paragraph
+			.code(param->name)
+			.space()
+			.text("→")
+			.space()
+			.text(param->description);
+	};
+
+	// MARK: - Build Output
+
+	/* Maybe add the 'Hovering Over' details */
+	maybeAddHoveringOver();
+
+	/* Append the symbol's definition (e.g., 'c32::markdown::Document HoverInfo::presentC32Doxygen() const') */
+	if (!Definition.empty())
+	{
+		std::string def;
+
+		if (!AccessSpecifier.empty())
+			def += AccessSpecifier + ": ";
+
+		def += Definition;
+
+		if (index::SymbolKind::EnumConstant == symbolKind)
+		{
+			std::string def = Definition;
+
+			if (const auto& val = Value)
+				def += " = " + *val;
+
+			output.codeBlock(DefinitionLanguage, def);
+
+			/* Thick divider between the 'KEY=n' definition and any doxygen */
+			output.line(/* Thickness */ 4U);
+		}
+		else
+		{
+			output.codeBlock(DefinitionLanguage, def);
+		}
+	}
+
+	/* Maybe add the provider, namespace, and local scope details */
+	maybeAddScopeAndProvider();
+
+	/* Maybe add the size, offset, and alignment details */
+	maybeAddSizeAndOffset();
+
+	/* Maybe add the callee argument details */
+	maybeAddCalleeArgInfo();
+
+	/* Parse and build out Doxygen content */
+	if (!Documentation.empty())
+	{
+		auto parsed = c32::doxygen::parse(*this);
+
+		switch (symbolKind)
+		{
+			case index::SymbolKind::Parameter:
+				addParameterDoxygen(parsed);
+				break;
+
+			default:
+				addFullDoxygen(parsed);
+				break;
 		}
 	}
 
@@ -2225,8 +2188,7 @@ HoverInfo::present() const
 
 			for (const auto& member : *Members)
 			{
-				list
-					.item()
+				list.item()
 					.code(member.Name)
 					.space()
 					.text("=")
@@ -2239,12 +2201,9 @@ HoverInfo::present() const
 	/* List symbols provided by the header when hovering over `#include` directives */
 	if (!ProvidedSymbols.empty())
 	{
-		output
-			.line();
+		output.line();
 
-		output
-			.heading(4U)
-			.text("Provides");
+		output.heading(4U).text("Provides");
 
 		auto& list = output.list();
 
@@ -2257,15 +2216,7 @@ HoverInfo::present() const
 			if (const auto& type = sym.Type)
 				kind = (*type).Type;
 
-			list
-				.item()
-				.code(sym.Name + (sym.isFunction() ? "()" : ""))
-				.bold()
-				.space()
-				.text("of type")
-				.italic()
-				.space()
-				.code(kind);
+			list.item().code(sym.Name + (sym.isFunction() ? "()" : "")).bold().space().text("of type").italic().space().code(kind);
 		}
 
 		if (ProvidedSymbols.size() > symbols.size())
