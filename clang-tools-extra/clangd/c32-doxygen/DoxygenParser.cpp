@@ -443,11 +443,8 @@ parse(const HoverInfo& info)
 
 					auto code = consumeUntil(tagContext, predicate::tagOrEnd);
 
-					llvm::errs() << "<><><><><><><> No code!\n";
 					if (!code)
 						break;
-
-					llvm::errs() << "<><><><><><><><><><><><> Code: '" << *code << "'\n";
 
 					auto printedCode = unescape(*code);
 
@@ -605,6 +602,23 @@ parse(const HoverInfo& info)
 					auto description = consumeUntil(tagContext, predicate::tagOrEnd);
 
 					doxygen.tparams[unescape(*value)] = description ? canonicalizeWhitespace(unescape(*description), true) : "";
+					break;
+				}
+
+				case TagType::Version:
+				{
+					ConsumeContext tagContext(tag->body);
+
+					auto value = consumeUntil(tagContext, predicate::spaceTagOrEnd);
+
+					if (!value)
+						break;
+
+					auto description = consumeUntil(tagContext, predicate::tagOrEnd);
+
+					doxygen.version.first  = unescape(*value);
+					doxygen.version.second = description ? canonicalizeWhitespace(unescape(*description), true) : "";
+
 					break;
 				}
 

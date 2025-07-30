@@ -87,6 +87,9 @@ struct ParsedDoxygen
 	/// Parsed from `^@throw`
 	std::map<std::string, std::string> throws;
 
+	/// Parsed from `^@version`
+	std::pair<std::string, std::string> version;
+
 	/// Parsed from `^@example`
 	std::vector<ExampleTag> examples;
 

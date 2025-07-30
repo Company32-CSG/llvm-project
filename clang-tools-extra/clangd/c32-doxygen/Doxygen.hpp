@@ -57,6 +57,9 @@ enum class TagType
 	/// Concrete type for `^@tparam`
 	TParam,
 
+	/// Concrete type for `^@version`
+	Version,
+
 	/// Concrete type for `^@warning`, `^@ret`
 	Warning,
 
