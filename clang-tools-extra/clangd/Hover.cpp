@@ -909,6 +909,17 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 		{
 			HI.ParentEnumName = "...";
 		}
+
+		if (auto* RC = Ctx.getRawCommentForDeclNoCache(namedDecl))
+		{
+			const auto& SM = Ctx.getSourceManager();
+
+			unsigned declLine	 = SM.getSpellingLineNumber(namedDecl->getLocation());
+			unsigned commentLine = SM.getSpellingLineNumber(RC->getEndLoc());
+
+			if (declLine != commentLine + 1)
+				HI.Documentation.clear();
+		}
 	}
 
 	HI.Definition = printDefinition(namedDecl, printPolicy, tokenBuffer);
@@ -1199,7 +1210,7 @@ getHoverContents(const SelectionTree::Node* N, const Expr* E, ParsedAST& AST, co
 	if (const PredefinedExpr* PE = dyn_cast<PredefinedExpr>(E))
 		HI = getPredefinedExprHoverContents(*PE, AST.getASTContext(), PP);
 	// For expressions we currently print the type and the value,
-	// iff it is evaluatable.
+	// if it is evaluatable.
 	if (auto Val = printExprValue(E, AST.getASTContext()))
 	{
 		HI.emplace();
@@ -1825,48 +1836,50 @@ HoverInfo::present() const
 		else if (index::SymbolKind::Struct == symbolKind)
 			contextName = "Struct";
 
-		output.heading(4U)
+		output.line(4U);
+
+		output.heading(3U)
 			.text(contextName + " Info");
 
-		auto& block = output.blockQuote();
+		auto& table = output.table();
+
+		if (Offset)
+			table.column("Offset");
+
+		if (Size)
+		{
+			table.column("Size");
+
+			if (Padding && 0U != *Padding)
+				table.column("Padding");
+
+			if (Align)
+				table.column("Alignment");
+		}
+
+		auto row = table.row();
 
 		if (Offset)
 		{
-			block
-				.text("Offset")
-				.italic()
-				.space()
-				.code(formatOffset(*Offset))
-				.newline();
+			row["Offset"]
+				.code(formatOffset(*Offset));
 		}
 
 		if (Size)
 		{
-			block
-				.text("Size")
-				.italic()
-				.space()
-				.code(formatSize(*Size))
-				.newline();
+			row["Size"]
+				.code(formatSize(*Size));
 
 			if (Padding && 0U != *Padding)
 			{
-				block
-					.text("Padding")
-					.italic()
-					.space()
-					.code(llvm::formatv("+{0} padding", formatSize(*Padding)).str())
-					.newline();
+				row["Padding"]
+					.code(formatSize(*Padding));
 			}
 
 			if (Align)
 			{
-				block
-					.text("Alignment")
-					.italic()
-					.space()
-					.code(formatSize(*Align))
-					.newline();
+				row["Alignment"]
+					.code(formatSize(*Align));
 			}
 		}
 	};
@@ -1934,6 +1947,8 @@ HoverInfo::present() const
 
 	auto addFullDoxygen = [&](c32::doxygen::ParsedDoxygen& parsed)
 	{
+		bool keepDivider = false;
+
 		/* Append the brief/description */
 		if (!parsed.brief.empty())
 		{
@@ -1953,11 +1968,13 @@ HoverInfo::present() const
 		}
 
 		/* Thick divider between the hover's heading with signature+brief and the rest */
-		output.line(/* Thickness */ 4U);
+		auto& divider = output.line(4U);
 
 		/* Append all warning tags */
 		if (!parsed.warnings.empty())
 		{
+			keepDivider = true;
+
 			output.heading(2U).text("⚠️ Warning");
 
 			auto& list = output.list().compact();
@@ -1971,6 +1988,8 @@ HoverInfo::present() const
 		/* Append deprecated warning */
 		if (!parsed.deprecated.empty())
 		{
+			keepDivider = true;
+
 			output.heading(3U).text("Deprecated").strikethrough();
 
 			output.paragraph().text(parsed.deprecated);
@@ -1985,7 +2004,10 @@ HoverInfo::present() const
 		/* Append function parameters */
 		if (!parsed.parameters.empty())
 		{
-			output.line();
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
 
 			output.heading(3U).text("Parameters");
 
@@ -2002,10 +2024,42 @@ HoverInfo::present() const
 			}
 		}
 
+		/* Append the collected @throw/@throws tags */
+		if (!parsed.tparams.empty())
+		{
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
+
+			output.heading(3U).text("Template Params");
+
+			auto& list = output.list();
+
+			for (const auto& [key, val] : llvm::reverse(parsed.tparams))
+			{
+				auto& item = list.item();
+
+				item.code(key).bold();
+
+				if (!val.empty())
+				{
+					item
+						.space()
+						.text("→")
+						.space()
+						.text(val);
+				}
+			}
+		}
+
 		/* Append the return type description */
 		if (!parsed.returns.empty())
 		{
-			output.line();
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
 
 			output.heading(3U).text("Returns");
 			output.paragraph().text(parsed.returns);
@@ -2017,7 +2071,11 @@ HoverInfo::present() const
 			/* Add the 'Returns' heading if the user didn't specify a @returns tag */
 			if (parsed.returns.empty())
 			{
-				output.line();
+				if (keepDivider)
+					output.line();
+				else
+					keepDivider = true;
+
 				output.heading(3U).text("Returns");
 			}
 
@@ -2036,10 +2094,42 @@ HoverInfo::present() const
 			}
 		}
 
+		/* Append the collected @throw/@throws tags */
+		if (!parsed.throws.empty())
+		{
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
+
+			output.heading(3U).text("Throws");
+
+			auto& list = output.list();
+
+			for (const auto& [key, val] : llvm::reverse(parsed.throws))
+			{
+				auto& item = list.item();
+
+				item.code(key).bold();
+
+				if (!val.empty())
+				{
+					item
+						.space()
+						.text("→")
+						.space()
+						.text(val);
+				}
+			}
+		}
+
 		/* Append custom Doxygen tags that we don't intercept */
 		if (!parsed.customTags.empty())
 		{
-			output.line();
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
 
 			for (const auto& customTag : parsed.customTags)
 			{
@@ -2052,7 +2142,10 @@ HoverInfo::present() const
 		/* Append any examples */
 		if (!parsed.examples.empty())
 		{
-			output.line();
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
 
 			for (const auto& exp : parsed.examples)
 			{
@@ -2069,7 +2162,10 @@ HoverInfo::present() const
 		/* Append any code blocks */
 		if (!parsed.codeBlocks.empty())
 		{
-			output.line();
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
 
 			for (const auto& codeBlock : parsed.codeBlocks)
 			{
@@ -2082,6 +2178,9 @@ HoverInfo::present() const
 				output.paragraph().text("}").bold();
 			}
 		}
+
+		if (!keepDivider)
+			divider.thickness(0U);
 	};
 
 	auto addParameterDoxygen = [&](c32::doxygen::ParsedDoxygen& parsed)
@@ -2140,8 +2239,11 @@ HoverInfo::present() const
 
 			output.codeBlock(DefinitionLanguage, def);
 
-			/* Thick divider between the 'KEY=n' definition and any doxygen */
-			output.line(/* Thickness */ 4U);
+			if (!Documentation.empty())
+			{
+				/* Thick divider between the 'KEY=n' definition and any doxygen */
+				output.line(/* Thickness */ 4U);
+			}
 		}
 		else
 		{
@@ -2151,9 +2253,6 @@ HoverInfo::present() const
 
 	/* Maybe add the provider, namespace, and local scope details */
 	maybeAddScopeAndProvider();
-
-	/* Maybe add the size, offset, and alignment details */
-	maybeAddSizeAndOffset();
 
 	/* Maybe add the callee argument details */
 	maybeAddCalleeArgInfo();
@@ -2197,6 +2296,9 @@ HoverInfo::present() const
 			}
 		}
 	}
+
+	/* Maybe add the size, offset, and alignment details */
+	maybeAddSizeAndOffset();
 
 	/* List symbols provided by the header when hovering over `#include` directives */
 	if (!ProvidedSymbols.empty())

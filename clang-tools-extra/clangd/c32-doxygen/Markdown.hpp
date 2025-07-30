@@ -431,6 +431,8 @@ public:
 	void
 	render(Renderer& r) const override
 	{
+		r.emitBlankLine();
+
 		/// Emit our ATX heading (#)
 		r.emitHeader(mLevel);
 
@@ -532,44 +534,86 @@ public:
  */
 class Table : public Block
 {
+public:
+	class Cell : public Block, public ChunkContainer<Cell>
+	{
+		void
+		render(Renderer& r) const override
+		{
+			renderChunks(r);
+		}
+	};
+
+	class RowBuilder
+	{
+	private:
+		const std::vector<std::pair<std::string, Align>>& columns;
+
+		std::vector<Cell>& cells;
+
+	public:
+		RowBuilder(const std::vector<std::pair<std::string, Align>>& columns, std::vector<Cell>& cells)
+			: columns(columns), cells(cells)
+		{
+			assert(cells.size() == columns.size());
+		}
+
+		Cell&
+		operator[](std::string_view name)
+		{
+			for (size_t i = 0U; i < columns.size(); i++)
+			{
+				const auto& [column, _] = columns[i];
+
+				if (name == column)
+					return cells[i];
+			}
+
+			llvm::errs() << "Table::RowBuilder::operator[] Unknown column name '" << name << "'\n";
+			assert(false && "Table::RowBuilder::operator[] Unknown column name");
+
+			return cells[0U];
+		}
+	};
+
 private:
-	std::vector<std::pair<std::string, Align>>		mColumns;
-	std::vector<std::vector<ChunkContainer<Table>>> mRows;
+	std::vector<std::pair<std::string, Align>> columns;
+	std::vector<std::vector<Cell>>			   rows;
 
 public:
-	Table(std::initializer_list<std::string> columns, Align alignment)
-	{
-		mColumns.reserve(columns.size());
+	Table() = default;
 
-		for (const auto& name : columns)
-			mColumns.emplace_back(name, alignment);
+	Table&
+	column(std::string name, Align alignment = Align::Left)
+	{
+		columns.emplace_back(std::move(name), alignment);
+
+		return *this;
 	}
 
-	Table(std::initializer_list<std::pair<std::string, Align>> columns) : mColumns(columns) {}
-
-	std::vector<ChunkContainer<Table>>&
+	RowBuilder
 	row()
 	{
-		std::vector<ChunkContainer<Table>> newRow(mColumns.size());
+		assert(!columns.empty() && "Table::row() No columns!");
 
-		mRows.push_back(std::move(newRow));
+		rows.emplace_back(columns.size());
 
-		return mRows.back();
+		return RowBuilder(columns, rows.back());
 	}
 
 	void
 	render(Renderer& r) const override
 	{
-		r.emitBlankLine();
+		r.emitNewLine();
 
 		/// Emit the leading 'wall' of the column headers
 		r.emitText("| ");
 
 		/// Emit headers: ' | First | Second | '
-		for (const auto& [column, _] : mColumns)
+		for (const auto& [column, _] : columns)
 		{
 			r.emitText(column);
-			r.emitText(" |");
+			r.emitText(" | ");
 		}
 
 		r.emitNewLine();
@@ -578,7 +622,7 @@ public:
 		r.emitText("|");
 
 		/// Emit divider with proper alignment for each column
-		for (const auto& [_, alignment] : mColumns)
+		for (const auto& [_, alignment] : columns)
 		{
 			switch (alignment)
 			{
@@ -597,7 +641,7 @@ public:
 		}
 
 		/// Emit the content for each row
-		for (const auto& rows : mRows)
+		for (const auto& rows : rows)
 		{
 			r.emitNewLine();
 
@@ -608,11 +652,11 @@ public:
 			{
 				rowColumn.renderChunks(r);
 
-				r.emitText(" |");
+				r.emitText(" | ");
 			}
 		}
 
-		r.emitBlankLine();
+		r.emitNewLine();
 	}
 };
 
@@ -629,10 +673,26 @@ private:
 public:
 	Line(size_t thickness = 1U) : mThickness(thickness) {}
 
+	/**
+	 * Update a line's thickness prior to rendering. The line can be omitted
+	 * by setting \p value to `0`.
+	 *
+	 * @param[in] value
+	 * 		The line's thickness. Setting to `0` will omit the line.
+	 */
+	void
+	thickness(size_t value)
+	{
+		mThickness = value;
+	}
+
 	void
 	render(Renderer& r) const override
 	{
-		r.emitNewLine();
+		if (0U == mThickness)
+			return;
+
+		r.emitBlankLine();
 
 		for (size_t i = 1U; i <= mThickness; i++)
 		{
@@ -641,8 +701,6 @@ public:
 			if (i + 1U < mThickness)
 				r.emitNewLine();
 		}
-
-		r.emitNewLine();
 	}
 };
 
@@ -773,21 +831,9 @@ public:
 	}
 
 	Table&
-	table(std::initializer_list<std::string> columns, Align alignment = Align::Left)
+	table()
 	{
-		auto block = std::make_unique<Table>(columns, alignment);
-
-		Table& bRef = *block;
-
-		mBlocks.push_back(std::move(block));
-
-		return bRef;
-	}
-
-	Table&
-	table(std::initializer_list<std::pair<std::string, Align>> columns)
-	{
-		auto block = std::make_unique<Table>(columns);
+		auto block = std::make_unique<Table>();
 
 		Table& bRef = *block;
 

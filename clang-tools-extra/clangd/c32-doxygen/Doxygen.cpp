@@ -12,7 +12,9 @@
 namespace clang::clangd::c32::doxygen {
 
 const std::vector<DoxygenTag> TagList = {
+	{ TagType::A, TagParsingFlags(true, false, false), "a", "Render the argument following this tag in italics." },
 	{ TagType::Brief, TagParsingFlags(false, true), "brief", "Summary of documented symbol." },
+	{ TagType::C, TagParsingFlags(true, false, false), "c", "Render the argument following this tag in an inline code block." },
 	{ TagType::Code, TagParsingFlags(false, true, true), "code", "Marks the beginning of a code block." },
 	{ TagType::EndCode, TagParsingFlags(false, false), "endcode", "Marks the end of a code block." },
 	{ TagType::Deprecated, TagParsingFlags(false, false), "deprecated", "Mark usage of the documented symbol as deprecated." },
@@ -23,6 +25,8 @@ const std::vector<DoxygenTag> TagList = {
 	{ TagType::Ref, TagParsingFlags(true, false), "ref", "Reference to a defined symbol.", { "r" } },
 	{ TagType::Returns, TagParsingFlags(false, false), "returns", "Description of return value.", { "return" } },
 	{ TagType::Retval, TagParsingFlags(false, false), "retval", "Description of a specific return value.", { "ret", "result" } },
+	{ TagType::Throw, TagParsingFlags(false, false), "throw", "Documents an exception a function may throw.", { "throws" } },
+	{ TagType::TParam, TagParsingFlags(false, false), "tparam", "Describes a template parameter.", { "templateparam" } },
 	{ TagType::Warning, TagParsingFlags(false, false), "warning", "Provide a warning to anyone using the documented symbol." },
 
 	{ TagType::Custom, TagParsingFlags(false, true), "note", "Additional notes or commentary." },
@@ -42,7 +46,6 @@ const std::vector<DoxygenTag> TagList = {
 	{ TagType::Custom, TagParsingFlags(false, true), "remark", "Provides an additional remark or observation." },
 	{ TagType::Custom, TagParsingFlags(false, false), "see", "Cross-reference to another documented entity." },
 	{ TagType::Custom, TagParsingFlags(false, false), "since", "Documents when the symbol was added." },
-	{ TagType::Custom, TagParsingFlags(false, false), "throws", "Documents an exception a function may throw." },
 	{ TagType::Custom, TagParsingFlags(false, false), "todo", "Marks something that needs to be completed." },
 	{ TagType::Custom, TagParsingFlags(false, false), "tparam", "Describes a template parameter.", { "templateparam" } },
 	{ TagType::Custom, TagParsingFlags(false, false), "version", "Specifies version information." },
@@ -301,7 +304,7 @@ getTag(std::string_view sv, size_t pos, TagContext context)
 
 			auto after = pos + nameLen;
 
-			if (after != sv.size() && !isTagTerminator(sv[after]))
+			if (after != sv.size() && !isTagTerminator(sv[after], tag.flags.Inline))
 				continue;
 
 			ret.tag		 = &tag;
@@ -319,7 +322,7 @@ getTag(std::string_view sv, size_t pos, TagContext context)
 
 		auto after = pos + nameLen;
 
-		if (after != sv.size() && !isTagTerminator(sv[after]))
+		if (after != sv.size() && !isTagTerminator(sv[after], tag.flags.Inline))
 			continue;
 
 		ret.tag		 = &tag;
@@ -333,12 +336,16 @@ getTag(std::string_view sv, size_t pos, TagContext context)
 }
 
 bool
-isTagTerminator(char c)
+isTagTerminator(char c, bool isInline)
 {
 	unsigned char uc = static_cast<unsigned char>(c);
 
-	// letters, digits or underscore are _not_ terminators:
-	return !(std::isalnum(uc) || c == '_' || c == ':');
+	bool ok = (std::isalnum(uc) || '_' == c || ':' == c || ';' == c);
+
+	if (isInline)
+		ok |= ('(' == c || ')' == c || '[' == c || ']' == c || '{' == c || '}' == c);
+
+	return !(ok);
 }
 
 } // namespace clang::clangd::c32::doxygen

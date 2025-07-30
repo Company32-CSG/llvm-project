@@ -12,8 +12,14 @@ namespace clang::clangd::c32::doxygen {
 
 enum class TagType
 {
+	/// Concrete type for `^@a`
+	A,
+
 	/// Concrete type for `^@brief`
 	Brief,
+
+	/// Concrete type for `^@c`
+	C,
 
 	/// Concrete type for `^@code` ... `^@endcode`
 	Code,
@@ -44,6 +50,12 @@ enum class TagType
 
 	/// Concrete type for `^@retval`, `^@ret`
 	Retval,
+
+	/// Concrete type for `^@throw`, `^@throws`
+	Throw,
+
+	/// Concrete type for `^@tparam`
+	TParam,
 
 	/// Concrete type for `^@warning`, `^@ret`
 	Warning,
@@ -249,7 +261,7 @@ struct MatchedTag
 
 std::optional<MatchedTag> getTag(std::string_view sv, size_t pos, TagContext context);
 
-bool isTagTerminator(char c);
+bool isTagTerminator(char c, bool isInline);
 
 } // namespace clang::clangd::c32::doxygen
 
