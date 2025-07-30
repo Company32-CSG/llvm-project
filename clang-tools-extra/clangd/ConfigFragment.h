@@ -32,7 +32,6 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CONFIGFRAGMENT_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CONFIGFRAGMENT_H
 
-#include "Config.h"
 #include "ConfigProvider.h"
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"

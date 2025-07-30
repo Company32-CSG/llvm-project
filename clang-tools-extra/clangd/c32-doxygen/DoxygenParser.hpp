@@ -75,11 +75,17 @@ struct ParsedDoxygen
 	/// Parsed from `^@param`
 	std::vector<ParameterTag> parameters;
 
+	/// Parsed from `^@tparam`
+	std::map<std::string, std::string> tparams;
+
 	/// Parsed from `^@returns`
 	std::string returns;
 
 	/// Parsed from `^@retval`
 	std::map<std::string, std::string> retvals;
+
+	/// Parsed from `^@throw`
+	std::map<std::string, std::string> throws;
 
 	/// Parsed from `^@example`
 	std::vector<ExampleTag> examples;

@@ -1,7 +1,6 @@
 #include "DoxygenParser.hpp"
 #include "Doxygen.hpp"
 #include "Utils.hpp"
-#include "to_string.hpp"
 
 #include "../Hover.h"
 
@@ -11,7 +10,6 @@
 
 #include <cctype>
 #include <cstddef>
-#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -62,6 +60,7 @@ const Flags spaceTagOrEnd(true, false, true, true, true);
 inline std::optional<size_t>
 execute(std::string_view sv, Flags& flags)
 {
+	std::optional<size_t> ret = std::nullopt;
 
 	auto tag = [](std::string_view sv) -> std::optional<size_t>
 	{
@@ -142,38 +141,40 @@ execute(std::string_view sv, Flags& flags)
 		return std::nullopt;
 	};
 
+	auto consider = [&](std::optional<size_t> pos)
+	{
+		if (!pos)
+			return;
+
+		if (!ret || *pos < *ret)
+			ret = pos;
+	};
+
 	if (flags.TAG)
 	{
-		std::optional<size_t> ret = std::nullopt;
-
 		if (flags.TAG_TERMINATOR)
-			ret = terminatingTag(sv);
+			consider(terminatingTag(sv));
 		else
-			ret = tag(sv);
-
-		if (auto p = ret)
-			return *p;
-	}
-
-	if (flags.BREAK)
-	{
-		if (auto p = blankLine(sv))
-			return *p;
+			consider(tag(sv));
 	}
 
 	if (flags.SPACE)
 	{
-		if (auto p = space(sv))
-			return *p;
+		consider(space(sv));
+	}
+
+	if (flags.BREAK)
+	{
+		consider(blankLine(sv));
 	}
 
 	if (flags.END)
 	{
 		if (!sv.empty())
-			return sv.size();
+			consider(sv.size());
 	}
 
-	return std::nullopt;
+	return ret;
 }
 
 } // namespace predicate
@@ -250,13 +251,19 @@ consumeUntil(ConsumeContext& context, predicate::Flags predicate)
 				size_t ident_start = cursor;
 
 				/* Find the end of the tag's value */
-				while (cursor < piece.size() && !isTagTerminator(piece[cursor]))
+				while (cursor < piece.size() && !isTagTerminator(piece[cursor], true))
 					cursor += 1U;
 
 				if (ident_start < cursor)
 				{
+					char c = '`';
+
 					switch (tag->tag->type)
 					{
+						case TagType::A:
+							c = '*';
+							break;
+
 						case TagType::Member:
 							finalResult.append("__Member__ ");
 							break;
@@ -273,9 +280,9 @@ consumeUntil(ConsumeContext& context, predicate::Flags predicate)
 							break;
 					}
 
-					finalResult.push_back('`');
+					finalResult.push_back(c);
 					finalResult.append(piece.data() + ident_start, cursor - ident_start);
-					finalResult.push_back('`');
+					finalResult.push_back(c);
 				}
 
 				/* Advance i manually so the main for-loop catches up to where we are now */
@@ -339,13 +346,15 @@ consumeTag(ConsumeContext& context)
 	ret.type = tag->tag->type;
 	ret.name = properNounCase(tag->name);
 
-	auto predicate = predicate::tagOrEnd;
+	auto predicate = predicate::breakTagOrEnd;
 
+	/* Enable tag terminator detection */
 	if (tag->tag->flags.HasTerminatingTag)
 		predicate.TAG_TERMINATOR = true;
 
+	/* Disable line-break detection */
 	if (tag->tag->flags.AllowLineBreaks)
-		predicate.BREAK = true;
+		predicate.BREAK = false;
 
 	auto consumedBody = consumeUntil(context, predicate);
 
@@ -566,6 +575,36 @@ parse(const HoverInfo& info)
 					auto description = consumeUntil(tagContext, predicate::tagOrEnd);
 
 					doxygen.retvals[unescape(*value)] = description ? canonicalizeWhitespace(unescape(*description), true) : "";
+					break;
+				}
+
+				case TagType::Throw:
+				{
+					ConsumeContext tagContext(tag->body);
+
+					auto value = consumeUntil(tagContext, predicate::spaceTagOrEnd);
+
+					if (!value)
+						break;
+
+					auto description = consumeUntil(tagContext, predicate::tagOrEnd);
+
+					doxygen.throws[unescape(*value)] = description ? canonicalizeWhitespace(unescape(*description), true) : "";
+					break;
+				}
+
+				case TagType::TParam:
+				{
+					ConsumeContext tagContext(tag->body);
+
+					auto value = consumeUntil(tagContext, predicate::spaceTagOrEnd);
+
+					if (!value)
+						break;
+
+					auto description = consumeUntil(tagContext, predicate::tagOrEnd);
+
+					doxygen.tparams[unescape(*value)] = description ? canonicalizeWhitespace(unescape(*description), true) : "";
 					break;
 				}
 
