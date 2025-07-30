@@ -12,6 +12,7 @@
 namespace clang::clangd::c32::doxygen {
 
 const std::vector<DoxygenTag> TagList = {
+	// MARK: - Lightbulb Doxygen Tags
 	{ TagType::A, TagParsingFlags(true, false, false), "a", "Render the argument following this tag in italics." },
 	{ TagType::Brief, TagParsingFlags(false, true), "brief", "Summary of documented symbol." },
 	{ TagType::C, TagParsingFlags(true, false, false), "c", "Render the argument following this tag in an inline code block." },
@@ -27,8 +28,10 @@ const std::vector<DoxygenTag> TagList = {
 	{ TagType::Retval, TagParsingFlags(false, false), "retval", "Description of a specific return value.", { "ret", "result" } },
 	{ TagType::Throw, TagParsingFlags(false, false), "throw", "Documents an exception a function may throw.", { "throws" } },
 	{ TagType::TParam, TagParsingFlags(false, false), "tparam", "Describes a template parameter.", { "templateparam" } },
+	{ TagType::Version, TagParsingFlags(false, false), "version", "Specifies version information.", { "available", "availability" } },
 	{ TagType::Warning, TagParsingFlags(false, false), "warning", "Provide a warning to anyone using the documented symbol." },
 
+	// MARK: - Unhandled Doxygen Tags
 	{ TagType::Custom, TagParsingFlags(false, true), "note", "Additional notes or commentary." },
 	{ TagType::Custom, TagParsingFlags(false, false), "attention", "Highlights something that needs attention." },
 	{ TagType::Custom, TagParsingFlags(false, false), "author", "Specifies the author of the code or documentation." },
@@ -48,7 +51,6 @@ const std::vector<DoxygenTag> TagList = {
 	{ TagType::Custom, TagParsingFlags(false, false), "since", "Documents when the symbol was added." },
 	{ TagType::Custom, TagParsingFlags(false, false), "todo", "Marks something that needs to be completed." },
 	{ TagType::Custom, TagParsingFlags(false, false), "tparam", "Describes a template parameter.", { "templateparam" } },
-	{ TagType::Custom, TagParsingFlags(false, false), "version", "Specifies version information." },
 	{ TagType::Custom, TagParsingFlags(false, false), "section", "Defines a named documentation section." },
 	{ TagType::Custom, TagParsingFlags(false, false), "subsection", "Defines a subsection inside a section." },
 	{ TagType::Custom, TagParsingFlags(false, true), "verbatim", "Begins a raw text block." },
@@ -343,7 +345,7 @@ isTagTerminator(char c, bool isInline)
 	bool ok = (std::isalnum(uc) || '_' == c || ':' == c || ';' == c);
 
 	if (isInline)
-		ok |= ('(' == c || ')' == c || '[' == c || ']' == c || '{' == c || '}' == c);
+		ok |= ('(' == c || ')' == c || '[' == c || ']' == c || '{' == c || '}' == c || '^' == c || '\\' == c || '@' == c);
 
 	return !(ok);
 }

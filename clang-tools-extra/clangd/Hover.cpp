@@ -2123,6 +2123,31 @@ HoverInfo::present() const
 			}
 		}
 
+		/* Append the @version/@available/@availability tag */
+		if (!parsed.version.first.empty())
+		{
+			if (keepDivider)
+				output.line();
+			else
+				keepDivider = true;
+
+			output.heading(3U).text("Availability");
+
+			auto& paragraph = output.paragraph();
+
+			paragraph
+				.code(parsed.version.first);
+
+			if (!parsed.version.second.empty())
+			{
+				paragraph
+					.space()
+					.text("→")
+					.space()
+					.text(parsed.version.second);
+			}
+		}
+
 		/* Append custom Doxygen tags that we don't intercept */
 		if (!parsed.customTags.empty())
 		{
