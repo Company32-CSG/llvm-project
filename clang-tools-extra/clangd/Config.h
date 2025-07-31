@@ -41,164 +41,245 @@ namespace clangd {
 /// Generally, features should consume Config::current() and the caller is
 /// responsible for setting it appropriately. In practice these callers are
 /// ClangdServer, TUScheduler, and BackgroundQueue.
-struct Config {
-  /// Returns the Config of the current Context, or an empty configuration.
-  static const Config &current();
-  /// Context key which can be used to set the current Config.
-  static clangd::Key<Config> Key;
+struct Config
+{
+	/// Returns the Config of the current Context, or an empty configuration.
+	static const Config& current();
+	/// Context key which can be used to set the current Config.
+	static clangd::Key<Config> Key;
 
-  Config() = default;
-  Config(const Config &) = delete;
-  Config &operator=(const Config &) = delete;
-  Config(Config &&) = default;
-  Config &operator=(Config &&) = default;
+	Config()						 = default;
+	Config(const Config&)			 = delete;
+	Config& operator=(const Config&) = delete;
+	Config(Config&&)				 = default;
+	Config& operator=(Config&&)		 = default;
 
-  struct CDBSearchSpec {
-    enum { Ancestors, FixedDir, NoCDBSearch } Policy = Ancestors;
-    // Absolute, native slashes, no trailing slash.
-    std::optional<std::string> FixedCDBPath;
-  };
+	struct CDBSearchSpec
+	{
+		enum
+		{
+			Ancestors,
+			FixedDir,
+			NoCDBSearch
+		} Policy = Ancestors;
+		// Absolute, native slashes, no trailing slash.
+		std::optional<std::string> FixedCDBPath;
+	};
 
-  /// Controls how the compile command for the current file is determined.
-  struct {
-    /// Edits to apply to the compile command, in sequence.
-    std::vector<llvm::unique_function<void(std::vector<std::string> &) const>>
-        Edits;
-    /// Where to search for compilation databases for this file's flags.
-    CDBSearchSpec CDBSearch = {CDBSearchSpec::Ancestors, std::nullopt};
-  } CompileFlags;
+	/// Controls how the compile command for the current file is determined.
+	struct
+	{
+		/// Edits to apply to the compile command, in sequence.
+		std::vector<llvm::unique_function<void(std::vector<std::string>&) const>>
+			Edits;
+		/// Where to search for compilation databases for this file's flags.
+		CDBSearchSpec CDBSearch = { CDBSearchSpec::Ancestors, std::nullopt };
+	} CompileFlags;
 
-  enum class BackgroundPolicy { Build, Skip };
-  /// Describes an external index configuration.
-  struct ExternalIndexSpec {
-    enum { None, File, Server } Kind = None;
-    /// This is one of:
-    /// - Address of a clangd-index-server, in the form of "ip:port".
-    /// - Absolute path to an index produced by clangd-indexer.
-    std::string Location;
-    /// Absolute path to source root this index is associated with, uses
-    /// forward-slashes.
-    std::string MountPoint;
-  };
-  /// Controls index behavior.
-  struct {
-    /// Whether this TU should be background-indexed.
-    BackgroundPolicy Background = BackgroundPolicy::Build;
-    ExternalIndexSpec External;
-    bool StandardLibrary = true;
-  } Index;
+	enum class BackgroundPolicy
+	{
+		Build,
+		Skip
+	};
+	/// Describes an external index configuration.
+	struct ExternalIndexSpec
+	{
+		enum
+		{
+			None,
+			File,
+			Server
+		} Kind = None;
+		/// This is one of:
+		/// - Address of a clangd-index-server, in the form of "ip:port".
+		/// - Absolute path to an index produced by clangd-indexer.
+		std::string Location;
+		/// Absolute path to source root this index is associated with, uses
+		/// forward-slashes.
+		std::string MountPoint;
+	};
+	/// Controls index behavior.
+	struct
+	{
+		/// Whether this TU should be background-indexed.
+		BackgroundPolicy  Background = BackgroundPolicy::Build;
+		ExternalIndexSpec External;
+		bool			  StandardLibrary = true;
+	} Index;
 
-  enum class IncludesPolicy {
-    /// Diagnose missing and unused includes.
-    Strict,
-    None,
-  };
-  enum class FastCheckPolicy { Strict, Loose, None };
-  /// Controls warnings and errors when parsing code.
-  struct {
-    bool SuppressAll = false;
-    llvm::StringSet<> Suppress;
+	enum class IncludesPolicy
+	{
+		/// Diagnose missing and unused includes.
+		Strict,
+		None,
+	};
+	enum class FastCheckPolicy
+	{
+		Strict,
+		Loose,
+		None
+	};
+	/// Controls warnings and errors when parsing code.
+	struct
+	{
+		bool			  SuppressAll = false;
+		llvm::StringSet<> Suppress;
 
-    /// Configures what clang-tidy checks to run and options to use with them.
-    struct {
-      // A comma-separated list of globs specify which clang-tidy checks to run.
-      std::string Checks;
-      llvm::StringMap<std::string> CheckOptions;
-      FastCheckPolicy FastCheckFilter = FastCheckPolicy::Strict;
-    } ClangTidy;
+		/// Configures what clang-tidy checks to run and options to use with them.
+		struct
+		{
+			// A comma-separated list of globs specify which clang-tidy checks to run.
+			std::string					 Checks;
+			llvm::StringMap<std::string> CheckOptions;
+			FastCheckPolicy				 FastCheckFilter = FastCheckPolicy::Strict;
+		} ClangTidy;
 
-    IncludesPolicy UnusedIncludes = IncludesPolicy::Strict;
-    IncludesPolicy MissingIncludes = IncludesPolicy::None;
+		IncludesPolicy UnusedIncludes  = IncludesPolicy::Strict;
+		IncludesPolicy MissingIncludes = IncludesPolicy::None;
 
-    struct {
-      /// IncludeCleaner will not diagnose usages of these headers matched by
-      /// these regexes.
-      std::vector<std::function<bool(llvm::StringRef)>> IgnoreHeader;
-      bool AnalyzeAngledIncludes = false;
-    } Includes;
-  } Diagnostics;
+		struct
+		{
+			/// IncludeCleaner will not diagnose usages of these headers matched by
+			/// these regexes.
+			std::vector<std::function<bool(llvm::StringRef)>> IgnoreHeader;
+			bool											  AnalyzeAngledIncludes = false;
+		} Includes;
+	} Diagnostics;
 
-  /// Style of the codebase.
-  struct {
-    // Namespaces that should always be fully qualified, meaning no "using"
-    // declarations, always spell out the whole name (with or without leading
-    // ::). All nested namespaces are affected as well.
-    std::vector<std::string> FullyQualifiedNamespaces;
+	/// Style of the codebase.
+	struct
+	{
+		// Namespaces that should always be fully qualified, meaning no "using"
+		// declarations, always spell out the whole name (with or without leading
+		// ::). All nested namespaces are affected as well.
+		std::vector<std::string> FullyQualifiedNamespaces;
 
-    // List of matcher functions for inserting certain headers with <> or "".
-    std::vector<std::function<bool(llvm::StringRef)>> QuotedHeaders;
-    std::vector<std::function<bool(llvm::StringRef)>> AngledHeaders;
-  } Style;
+		// List of matcher functions for inserting certain headers with <> or "".
+		std::vector<std::function<bool(llvm::StringRef)>> QuotedHeaders;
+		std::vector<std::function<bool(llvm::StringRef)>> AngledHeaders;
+	} Style;
 
-  /// controls the completion options for argument lists.
-  enum class ArgumentListsPolicy {
-    /// nothing, no argument list and also NO Delimiters "()" or "<>".
-    None,
-    /// open, only opening delimiter "(" or "<".
-    OpenDelimiter,
-    /// empty pair of delimiters "()" or "<>".
-    Delimiters,
-    /// full name of both type and variable.
-    FullPlaceholders,
-  };
+	/// controls the completion options for argument lists.
+	enum class ArgumentListsPolicy
+	{
+		/// nothing, no argument list and also NO Delimiters "()" or "<>".
+		None,
+		/// open, only opening delimiter "(" or "<".
+		OpenDelimiter,
+		/// empty pair of delimiters "()" or "<>".
+		Delimiters,
+		/// full name of both type and variable.
+		FullPlaceholders,
+	};
 
-  /// Configures code completion feature.
-  struct {
-    /// Whether code completion includes results that are not visible in current
-    /// scopes.
-    bool AllScopes = true;
-    /// controls the completion options for argument lists.
-    ArgumentListsPolicy ArgumentLists = ArgumentListsPolicy::FullPlaceholders;
-  } Completion;
+	/// Configures code completion feature.
+	struct
+	{
+		/// Whether code completion includes results that are not visible in current
+		/// scopes.
+		bool AllScopes = true;
+		/// controls the completion options for argument lists.
+		ArgumentListsPolicy ArgumentLists = ArgumentListsPolicy::FullPlaceholders;
+	} Completion;
 
-  /// Configures hover feature.
-  struct {
-    /// Whether hover show a.k.a type.
-    bool ShowAKA = true;
-  } Hover;
+	/// Configures hover feature.
+	struct
+	{
+		/// Whether hover show a.k.a type.
+		bool ShowAKA = true;
+	} Hover;
 
-  struct {
-    /// If false, inlay hints are completely disabled.
-    bool Enabled = true;
+	struct
+	{
+		/// If false, inlay hints are completely disabled.
+		bool Enabled = true;
 
-    // Whether specific categories of hints are enabled.
-    bool Parameters = true;
-    bool DeducedTypes = true;
-    bool Designators = true;
-    bool BlockEnd = false;
-    bool DefaultArguments = false;
-    // Limit the length of type names in inlay hints. (0 means no limit)
-    uint32_t TypeNameLimit = 32;
-  } InlayHints;
+		// Whether specific categories of hints are enabled.
+		bool Parameters		  = true;
+		bool DeducedTypes	  = true;
+		bool Designators	  = true;
+		bool BlockEnd		  = false;
+		bool DefaultArguments = false;
+		// Limit the length of type names in inlay hints. (0 means no limit)
+		uint32_t TypeNameLimit = 32;
+	} InlayHints;
 
-  struct {
-    /// Controls highlighting kinds that are disabled.
-    std::vector<std::string> DisabledKinds;
-    /// Controls highlighting modifiers that are disabled.
-    std::vector<std::string> DisabledModifiers;
-  } SemanticTokens;
+	struct
+	{
+		/// Controls highlighting kinds that are disabled.
+		std::vector<std::string> DisabledKinds;
+		/// Controls highlighting modifiers that are disabled.
+		std::vector<std::string> DisabledModifiers;
+	} SemanticTokens;
+
+	struct
+	{
+		struct
+		{
+			/// Show the 'Hovering Over' information in hover. This shows the
+			/// symbol type that is being hovered over.
+			bool ShowHoveringOver = false;
+
+			/// Show which heder file has provided the respective symbol
+			bool ShowProvider = true;
+
+			/// Show the namespace and scope where applicable for the respective symbol
+			bool ShowScope = false;
+
+			/// Show details about field/struct/class size, offset, and alignment
+			bool ShowSizeAndOffset = false;
+
+			/// Show what files are provided by a header when hovering over `#include` directives
+			bool ShowProvidedSymbols = true;
+
+			/// Show information about how a value is being passed to a function.
+			///
+			/// @note
+			/// Given this function:
+			///
+			/// > `void my_name(std::string name_value)`
+			///
+			/// Called:
+			///
+			/// > `my_name("Moe")`
+			///
+			/// Hovering over `"Moe"` would produce:
+			///
+			/// > Passing `string-literal` as `name_value` (converted to `std::string`)
+			bool ShowCalleeInfo = true;
+		} Hover;
+	} C32;
 };
 
 } // namespace clangd
 } // namespace clang
 
 namespace llvm {
-template <> struct DenseMapInfo<clang::clangd::Config::ExternalIndexSpec> {
-  using ExternalIndexSpec = clang::clangd::Config::ExternalIndexSpec;
-  static inline ExternalIndexSpec getEmptyKey() {
-    return {ExternalIndexSpec::File, "", ""};
-  }
-  static inline ExternalIndexSpec getTombstoneKey() {
-    return {ExternalIndexSpec::File, "TOMB", "STONE"};
-  }
-  static unsigned getHashValue(const ExternalIndexSpec &Val) {
-    return llvm::hash_combine(Val.Kind, Val.Location, Val.MountPoint);
-  }
-  static bool isEqual(const ExternalIndexSpec &LHS,
-                      const ExternalIndexSpec &RHS) {
-    return std::tie(LHS.Kind, LHS.Location, LHS.MountPoint) ==
-           std::tie(RHS.Kind, RHS.Location, RHS.MountPoint);
-  }
+template <>
+struct DenseMapInfo<clang::clangd::Config::ExternalIndexSpec>
+{
+	using ExternalIndexSpec = clang::clangd::Config::ExternalIndexSpec;
+	static inline ExternalIndexSpec
+	getEmptyKey()
+	{
+		return { ExternalIndexSpec::File, "", "" };
+	}
+	static inline ExternalIndexSpec
+	getTombstoneKey()
+	{
+		return { ExternalIndexSpec::File, "TOMB", "STONE" };
+	}
+	static unsigned
+	getHashValue(const ExternalIndexSpec& Val)
+	{
+		return llvm::hash_combine(Val.Kind, Val.Location, Val.MountPoint);
+	}
+	static bool
+	isEqual(const ExternalIndexSpec& LHS, const ExternalIndexSpec& RHS)
+	{
+		return std::tie(LHS.Kind, LHS.Location, LHS.MountPoint) ==
+			std::tie(RHS.Kind, RHS.Location, RHS.MountPoint);
+	}
 };
 } // namespace llvm
 
