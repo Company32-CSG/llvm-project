@@ -4,6 +4,7 @@
 
 #include "../Hover.h"
 
+#include "clang/Format/Format.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
@@ -256,12 +257,16 @@ consumeUntil(ConsumeContext& context, predicate::Flags predicate)
 
 				if (ident_start < cursor)
 				{
-					char c = '`';
+					const char* c = "`";
 
 					switch (tag->tag->type)
 					{
 						case TagType::A:
-							c = '*';
+							c = "*";
+							break;
+
+						case TagType::B:
+							c = "**";
 							break;
 
 						case TagType::Member:
@@ -280,9 +285,9 @@ consumeUntil(ConsumeContext& context, predicate::Flags predicate)
 							break;
 					}
 
-					finalResult.push_back(c);
+					finalResult.append(c);
 					finalResult.append(piece.data() + ident_start, cursor - ident_start);
-					finalResult.push_back(c);
+					finalResult.append(c);
 				}
 
 				/* Advance i manually so the main for-loop catches up to where we are now */
@@ -404,9 +409,9 @@ consumeTag(ConsumeContext& context)
 } // namespace
 
 ParsedDoxygen
-parse(const HoverInfo& info)
+parse(std::string_view contents, const format::FormatStyle& style)
 {
-	ConsumeContext context(info.Documentation);
+	ConsumeContext context(contents);
 	ParsedDoxygen  doxygen;
 
 	while (auto consumed = consumeUntil(context, predicate::tagOrEnd))
@@ -453,7 +458,7 @@ parse(const HoverInfo& info)
 					else
 						t.lang = tag->attributes.front();
 
-					tooling::Replacements replacements = reformat(info.Style, printedCode, { tooling::Range(0, printedCode.size()) });
+					tooling::Replacements replacements = reformat(style, printedCode, { tooling::Range(0, printedCode.size()) });
 
 					llvm::Expected<std::string> formatted = tooling::applyAllReplacements(printedCode, replacements);
 
@@ -496,7 +501,7 @@ parse(const HoverInfo& info)
 					else
 						t.lang = tag->attributes.front();
 
-					tooling::Replacements replacements = reformat(info.Style, printedCode, { tooling::Range(0, printedCode.size()) });
+					tooling::Replacements replacements = reformat(style, printedCode, { tooling::Range(0, printedCode.size()) });
 
 					llvm::Expected<std::string> formatted = tooling::applyAllReplacements(printedCode, replacements);
 

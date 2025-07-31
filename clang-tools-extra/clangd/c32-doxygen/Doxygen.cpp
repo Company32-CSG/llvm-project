@@ -14,6 +14,7 @@ namespace clang::clangd::c32::doxygen {
 const std::vector<DoxygenTag> TagList = {
 	// MARK: - Lightbulb Doxygen Tags
 	{ TagType::A, TagParsingFlags(true, false, false), "a", "Render the argument following this tag in italics." },
+	{ TagType::B, TagParsingFlags(true, false, false), "b", "Render the argument following this tag in bold." },
 	{ TagType::Brief, TagParsingFlags(false, true), "brief", "Summary of documented symbol." },
 	{ TagType::C, TagParsingFlags(true, false, false), "c", "Render the argument following this tag in an inline code block." },
 	{ TagType::Code, TagParsingFlags(false, true, true), "code", "Marks the beginning of a code block." },

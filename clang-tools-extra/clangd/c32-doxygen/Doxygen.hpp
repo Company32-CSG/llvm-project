@@ -1,7 +1,5 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_HPP
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_HPP
-#include "../CodeComplete.h"
-
 #include "llvm/ADT/ArrayRef.h"
 
 #include <cstddef>
@@ -14,6 +12,9 @@ enum class TagType
 {
 	/// Concrete type for `^@a`
 	A,
+
+	/// Concrete type for `^@b`
+	B,
 
 	/// Concrete type for `^@brief`
 	Brief,

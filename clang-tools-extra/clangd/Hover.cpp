@@ -11,7 +11,6 @@
 #include "AST.h"
 #include "CodeCompletionStrings.h"
 #include "Config.h"
-#include "DoxygenTagParser.hpp"
 #include "FindTarget.h"
 #include "Headers.h"
 #include "IncludeCleaner.h"
@@ -47,11 +46,11 @@
 #include "clang/AST/Type.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/LLVM.h"
-#include "clang/Basic/LangStandard.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TokenKinds.h"
+#include "clang/Format/Format.h"
 #include "clang/Index/IndexSymbol.h"
 #include "clang/Tooling/Syntax/Tokens.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -622,126 +621,6 @@ printExprValue(const SelectionTree::Node* N, const ASTContext& Ctx)
 							/*Node=*/N };
 }
 
-std::optional<StringRef>
-fieldName(const Expr* E)
-{
-	const auto* ME = llvm::dyn_cast<MemberExpr>(E->IgnoreCasts());
-	if (!ME || !llvm::isa<CXXThisExpr>(ME->getBase()->IgnoreCasts()))
-		return std::nullopt;
-	const auto* Field = llvm::dyn_cast<FieldDecl>(ME->getMemberDecl());
-	if (!Field || !Field->getDeclName().isIdentifier())
-		return std::nullopt;
-	return Field->getDeclName().getAsIdentifierInfo()->getName();
-}
-
-// If CMD is of the form T foo() { return FieldName; } then returns
-// "FieldName".
-std::optional<StringRef>
-getterVariableName(const CXXMethodDecl* CMD)
-{
-	assert(CMD->hasBody());
-	if (CMD->getNumParams() != 0 || CMD->isVariadic())
-		return std::nullopt;
-	const auto* Body	   = llvm::dyn_cast<CompoundStmt>(CMD->getBody());
-	const auto* OnlyReturn = (Body && Body->size() == 1) ? llvm::dyn_cast<ReturnStmt>(Body->body_front()) : nullptr;
-	if (!OnlyReturn || !OnlyReturn->getRetValue())
-		return std::nullopt;
-	return fieldName(OnlyReturn->getRetValue());
-}
-
-// If CMD is one of the forms:
-//   void foo(T arg) { FieldName = arg; }
-//   R foo(T arg) { FieldName = arg; return *this; }
-//   void foo(T arg) { FieldName = std::move(arg); }
-//   R foo(T arg) { FieldName = std::move(arg); return *this; }
-// then returns "FieldName"
-std::optional<StringRef>
-setterVariableName(const CXXMethodDecl* CMD)
-{
-	assert(CMD->hasBody());
-	if (CMD->isConst() || CMD->getNumParams() != 1 || CMD->isVariadic())
-		return std::nullopt;
-	const ParmVarDecl* Arg = CMD->getParamDecl(0);
-	if (Arg->isParameterPack())
-		return std::nullopt;
-
-	const auto* Body = llvm::dyn_cast<CompoundStmt>(CMD->getBody());
-	if (!Body || Body->size() == 0 || Body->size() > 2)
-		return std::nullopt;
-	// If the second statement exists, it must be `return this` or
-	// `return *this`.
-	if (Body->size() == 2)
-	{
-		auto* Ret = llvm::dyn_cast<ReturnStmt>(Body->body_back());
-		if (!Ret || !Ret->getRetValue())
-			return std::nullopt;
-		const Expr* RetVal = Ret->getRetValue()->IgnoreCasts();
-		if (const auto* UO = llvm::dyn_cast<UnaryOperator>(RetVal))
-		{
-			if (UO->getOpcode() != UO_Deref)
-				return std::nullopt;
-			RetVal = UO->getSubExpr()->IgnoreCasts();
-		}
-		if (!llvm::isa<CXXThisExpr>(RetVal))
-			return std::nullopt;
-	}
-	// The first statement must be an assignment of the arg to a
-	// field.
-	const Expr *LHS, *RHS;
-	if (const auto* BO = llvm::dyn_cast<BinaryOperator>(Body->body_front()))
-	{
-		if (BO->getOpcode() != BO_Assign)
-			return std::nullopt;
-		LHS = BO->getLHS();
-		RHS = BO->getRHS();
-	}
-	else if (const auto* COCE = llvm::dyn_cast<CXXOperatorCallExpr>(Body->body_front()))
-	{
-		if (COCE->getOperator() != OO_Equal || COCE->getNumArgs() != 2)
-			return std::nullopt;
-		LHS = COCE->getArg(0);
-		RHS = COCE->getArg(1);
-	}
-	else
-	{
-		return std::nullopt;
-	}
-
-	// Detect the case when the item is moved into the field.
-	if (auto* CE = llvm::dyn_cast<CallExpr>(RHS->IgnoreCasts()))
-	{
-		if (CE->getNumArgs() != 1)
-			return std::nullopt;
-		auto* ND = llvm::dyn_cast_or_null<NamedDecl>(CE->getCalleeDecl());
-		if (!ND || !ND->getIdentifier() || ND->getName() != "move" || !ND->isInStdNamespace())
-			return std::nullopt;
-		RHS = CE->getArg(0);
-	}
-
-	auto* DRE = llvm::dyn_cast<DeclRefExpr>(RHS->IgnoreCasts());
-	if (!DRE || DRE->getDecl() != Arg)
-		return std::nullopt;
-	return fieldName(LHS);
-}
-
-std::string
-synthesizeDocumentation(const NamedDecl* ND)
-{
-	if (const auto* CMD = llvm::dyn_cast<CXXMethodDecl>(ND))
-	{
-		// Is this an ordinary, non-static method whose definition is visible?
-		if (CMD->getDeclName().isIdentifier() && !CMD->isStatic() && (CMD = llvm::dyn_cast_or_null<CXXMethodDecl>(CMD->getDefinition())) && CMD->hasBody())
-		{
-			if (const auto GetterField = getterVariableName(CMD))
-				return llvm::formatv("Trivial accessor for `{0}`.", *GetterField);
-			if (const auto SetterField = setterVariableName(CMD))
-				return llvm::formatv("Trivial setter for `{0}`.", *SetterField);
-		}
-	}
-
-	return "";
-}
-
 /// Generate a \p Hover object given the declaration \p D.
 HoverInfo
 getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, const SymbolIndex* index, const syntax::TokenBuffer& tokenBuffer)
@@ -766,9 +645,6 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 
 	enhanceFromIndex(HI, *CommentD, index);
 
-	// if (HI.Documentation.empty())
-	// 	HI.Documentation = synthesizeDocumentation(namedDecl);
-
 	HI.Kind = index::getSymbolInfo(namedDecl).Kind;
 
 	if (HI.Kind == index::SymbolKind::TypeAlias)
@@ -782,8 +658,6 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 				const TagDecl* tagDecl = tagType->getDecl();
 
 				HI.UnderlyingKind = index::getSymbolInfo(tagDecl).Kind;
-
-				llvm::errs() << "Underlying Kind: " << std::to_string(*(HI.UnderlyingKind)) << "\n";
 			}
 		}
 	}
@@ -908,17 +782,6 @@ getHoverContents(const NamedDecl* namedDecl, const PrintingPolicy& printPolicy, 
 		else
 		{
 			HI.ParentEnumName = "...";
-		}
-
-		if (auto* RC = Ctx.getRawCommentForDeclNoCache(namedDecl))
-		{
-			const auto& SM = Ctx.getSourceManager();
-
-			unsigned declLine	 = SM.getSpellingLineNumber(namedDecl->getLocation());
-			unsigned commentLine = SM.getSpellingLineNumber(RC->getEndLoc());
-
-			if (declLine != commentLine + 1)
-				HI.Documentation.clear();
 		}
 	}
 
@@ -2285,7 +2148,7 @@ HoverInfo::present() const
 	/* Parse and build out Doxygen content */
 	if (!Documentation.empty())
 	{
-		auto parsed = c32::doxygen::parse(*this);
+		auto parsed = c32::doxygen::parse(Documentation, Style);
 
 		switch (symbolKind)
 		{

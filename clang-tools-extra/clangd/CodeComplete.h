@@ -20,6 +20,7 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Quality.h"
+#include "c32-doxygen/Markdown.hpp"
 #include "index/Index.h"
 #include "index/Symbol.h"
 #include "index/SymbolOrigin.h"
@@ -190,8 +191,11 @@ struct CodeCompletion
 	// Type to be displayed for this completion.
 	std::string ReturnType;
 	// The parsed documentation comment.
-	std::optional<markup::Document> Documentation;
-	CompletionItemKind				Kind = CompletionItemKind::Missing;
+	// std::optional<markup::Document> Documentation;
+
+	std::optional<c32::markdown::Document> Documentation;
+
+	CompletionItemKind Kind = CompletionItemKind::Missing;
 	// This completion item may represent several symbols that can be inserted in
 	// the same way, such as function overloads. In this case BundleSize > 1, and
 	// the following fields are summaries:

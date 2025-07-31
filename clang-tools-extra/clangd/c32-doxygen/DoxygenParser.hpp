@@ -1,6 +1,6 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_PARSER_HPP
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_PARSER_HPP
-#include "../Hover.h"
+#include "clang/Format/Format.h"
 
 #include <vector>
 
@@ -97,7 +97,7 @@ struct ParsedDoxygen
 	std::vector<CodeTag> codeBlocks;
 };
 
-ParsedDoxygen parse(const HoverInfo& info);
+ParsedDoxygen parse(std::string_view contents, const format::FormatStyle& style);
 
 // MARK: - Specifier Operators
 

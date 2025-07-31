@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <initializer_list>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -782,7 +781,7 @@ public:
 class Document : public Block
 {
 private:
-	std::vector<std::unique_ptr<Block>> mBlocks;
+	std::vector<std::shared_ptr<Block>> mBlocks;
 
 	void
 	render(Renderer& r) const override
@@ -794,6 +793,28 @@ private:
 	}
 
 public:
+	Document() {}
+
+	Document(std::string contents)
+	{
+		auto block = std::make_unique<Paragraph>();
+
+		Paragraph& bRef = *block;
+
+		bRef.text(contents);
+
+		mBlocks.push_back(std::move(block));
+	}
+
+	void
+	append(const Document& document)
+	{
+		for (const auto& block : document.mBlocks)
+		{
+			mBlocks.push_back(block);
+		}
+	}
+
 	Heading&
 	heading(unsigned int level)
 	{
@@ -879,7 +900,7 @@ public:
 	}
 
 	std::string
-	markdown()
+	markdown() const
 	{
 		std::string				 buffer;
 		llvm::raw_string_ostream out(buffer);
@@ -891,7 +912,7 @@ public:
 	}
 
 	std::string
-	plaintext()
+	plaintext() const
 	{
 		std::string				 buffer;
 		llvm::raw_string_ostream out(buffer);
