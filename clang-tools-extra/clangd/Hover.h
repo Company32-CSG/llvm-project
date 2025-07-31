@@ -217,7 +217,7 @@ struct HoverInfo
 
 	std::vector<UsedSymbol> ProvidedSymbols;
 
-	/// Produce a user-readable information.
+	/// Produce user-readable information.
 	c32::markdown::Document present() const;
 
 	inline index::SymbolKind

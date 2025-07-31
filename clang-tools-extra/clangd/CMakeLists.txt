@@ -77,7 +77,6 @@ add_clang_library(clangDaemon STATIC
   ConfigYAML.cpp
   DecisionForest.cpp
   Diagnostics.cpp
-  DoxygenTagParser.cpp
   DraftStore.cpp
   DumpAST.cpp
   ExpectedTypes.cpp

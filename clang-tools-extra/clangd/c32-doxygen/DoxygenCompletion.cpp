@@ -6,7 +6,7 @@
 #include "Utils.hpp"
 
 #include "../CodeComplete.h"
-#include "../support/Markup.h"
+#include "c32-doxygen/Markdown.hpp"
 
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
@@ -156,15 +156,18 @@ splitAttrs(std::string_view sv)
 	return ret;
 }
 
-markup::Document
+markdown::Document
 buildItemDoc(const DoxygenTag& tag)
 {
-	markup::Document doc;
+	markdown::Document output;
 
-	doc.addHeading(3U).appendText("💡");
-	doc.addParagraph().appendText(tag.description);
+	output.heading(3U)
+		.text("💡");
 
-	return doc;
+	output.paragraph()
+		.text(std::string(tag.description));
+
+	return output;
 }
 
 std::vector<CodeCompletion>
