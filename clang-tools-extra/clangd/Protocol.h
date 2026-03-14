@@ -63,9 +63,9 @@ enum class ErrorCode
 // Models an LSP error as an llvm::Error.
 class LSPError : public llvm::ErrorInfo<LSPError>
 {
-  public:
+public:
 	std::string Message;
-	ErrorCode Code;
+	ErrorCode	Code;
 	static char ID;
 
 	LSPError(std::string Message, ErrorCode Code) : Message(std::move(Message)), Code(Code) {}
@@ -82,7 +82,7 @@ class LSPError : public llvm::ErrorInfo<LSPError>
 	}
 };
 
-bool fromJSON(const llvm::json::Value&, SymbolID&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, SymbolID&, llvm::json::Path);
 llvm::json::Value toJSON(const SymbolID&);
 
 // URI in "file" scheme for a file.
@@ -140,7 +140,7 @@ struct URIForFile
 		return LHS.File < RHS.File;
 	}
 
-  private:
+private:
 	explicit URIForFile(std::string&& File) : File(std::move(File)) {}
 
 	std::string File;
@@ -148,7 +148,7 @@ struct URIForFile
 
 /// Serialize/deserialize \p URIForFile to/from a string URI.
 llvm::json::Value toJSON(const URIForFile& U);
-bool fromJSON(const llvm::json::Value&, URIForFile&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, URIForFile&, llvm::json::Path);
 
 struct TextDocumentIdentifier
 {
@@ -156,7 +156,7 @@ struct TextDocumentIdentifier
 	URIForFile uri;
 };
 llvm::json::Value toJSON(const TextDocumentIdentifier&);
-bool fromJSON(const llvm::json::Value&, TextDocumentIdentifier&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, TextDocumentIdentifier&, llvm::json::Path);
 
 struct VersionedTextDocumentIdentifier : public TextDocumentIdentifier
 {
@@ -173,7 +173,7 @@ struct VersionedTextDocumentIdentifier : public TextDocumentIdentifier
 	std::optional<std::int64_t> version;
 };
 llvm::json::Value toJSON(const VersionedTextDocumentIdentifier&);
-bool fromJSON(const llvm::json::Value&, VersionedTextDocumentIdentifier&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, VersionedTextDocumentIdentifier&, llvm::json::Path);
 
 struct Position
 {
@@ -206,8 +206,8 @@ struct Position
 		return std::tie(LHS.line, LHS.character) <= std::tie(RHS.line, RHS.character);
 	}
 };
-bool fromJSON(const llvm::json::Value&, Position&, llvm::json::Path);
-llvm::json::Value toJSON(const Position&);
+bool			   fromJSON(const llvm::json::Value&, Position&, llvm::json::Path);
+llvm::json::Value  toJSON(const Position&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const Position&);
 
 struct Range
@@ -245,15 +245,15 @@ struct Range
 		return start <= Rng.start && Rng.end <= end;
 	}
 };
-bool fromJSON(const llvm::json::Value&, Range&, llvm::json::Path);
-llvm::json::Value toJSON(const Range&);
+bool			   fromJSON(const llvm::json::Value&, Range&, llvm::json::Path);
+llvm::json::Value  toJSON(const Range&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const Range&);
 
 struct Location
 {
 	/// The text document's URI.
 	URIForFile uri;
-	Range range;
+	Range	   range;
 
 	friend bool
 	operator==(const Location& LHS, const Location& RHS)
@@ -273,7 +273,7 @@ struct Location
 		return std::tie(LHS.uri, LHS.range) < std::tie(RHS.uri, RHS.range);
 	}
 };
-llvm::json::Value toJSON(const Location&);
+llvm::json::Value  toJSON(const Location&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const Location&);
 
 /// Extends Locations returned by textDocument/references with extra info.
@@ -284,7 +284,7 @@ struct ReferenceLocation : Location
 	/// reference occurs
 	std::optional<std::string> containerName;
 };
-llvm::json::Value toJSON(const ReferenceLocation&);
+llvm::json::Value  toJSON(const ReferenceLocation&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const ReferenceLocation&);
 
 using ChangeAnnotationIdentifier = std::string;
@@ -308,8 +308,8 @@ operator==(const TextEdit& L, const TextEdit& R)
 {
 	return std::tie(L.newText, L.range, L.annotationId) == std::tie(R.newText, R.range, L.annotationId);
 }
-bool fromJSON(const llvm::json::Value&, TextEdit&, llvm::json::Path);
-llvm::json::Value toJSON(const TextEdit&);
+bool			   fromJSON(const llvm::json::Value&, TextEdit&, llvm::json::Path);
+llvm::json::Value  toJSON(const TextEdit&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const TextEdit&);
 
 struct ChangeAnnotation
@@ -326,7 +326,7 @@ struct ChangeAnnotation
 	/// the user interface.
 	std::string description;
 };
-bool fromJSON(const llvm::json::Value&, ChangeAnnotation&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, ChangeAnnotation&, llvm::json::Path);
 llvm::json::Value toJSON(const ChangeAnnotation&);
 
 struct TextDocumentEdit
@@ -338,7 +338,7 @@ struct TextDocumentEdit
 	/// FIXME: support the AnnotatedTextEdit variant.
 	std::vector<TextEdit> edits;
 };
-bool fromJSON(const llvm::json::Value&, TextDocumentEdit&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, TextDocumentEdit&, llvm::json::Path);
 llvm::json::Value toJSON(const TextDocumentEdit&);
 
 struct TextDocumentItem
@@ -428,11 +428,11 @@ enum class CompletionItemKind
 	Operator	  = 24,
 	TypeParameter = 25,
 };
-bool fromJSON(const llvm::json::Value&, CompletionItemKind&, llvm::json::Path);
+bool		   fromJSON(const llvm::json::Value&, CompletionItemKind&, llvm::json::Path);
 constexpr auto CompletionItemKindMin = static_cast<size_t>(CompletionItemKind::Text);
 constexpr auto CompletionItemKindMax = static_cast<size_t>(CompletionItemKind::TypeParameter);
 using CompletionItemKindBitset		 = std::bitset<CompletionItemKindMax + 1>;
-bool fromJSON(const llvm::json::Value&, CompletionItemKindBitset&, llvm::json::Path);
+bool			   fromJSON(const llvm::json::Value&, CompletionItemKindBitset&, llvm::json::Path);
 CompletionItemKind adjustKindToCapability(CompletionItemKind Kind, CompletionItemKindBitset& SupportedCompletionItemKinds);
 
 /// A symbol kind.
@@ -465,11 +465,11 @@ enum class SymbolKind
 	Operator	  = 25,
 	TypeParameter = 26
 };
-bool fromJSON(const llvm::json::Value&, SymbolKind&, llvm::json::Path);
+bool		   fromJSON(const llvm::json::Value&, SymbolKind&, llvm::json::Path);
 constexpr auto SymbolKindMin = static_cast<size_t>(SymbolKind::File);
 constexpr auto SymbolKindMax = static_cast<size_t>(SymbolKind::TypeParameter);
 using SymbolKindBitset		 = std::bitset<SymbolKindMax + 1>;
-bool fromJSON(const llvm::json::Value&, SymbolKindBitset&, llvm::json::Path);
+bool	   fromJSON(const llvm::json::Value&, SymbolKindBitset&, llvm::json::Path);
 SymbolKind adjustKindToCapability(SymbolKind Kind, SymbolKindBitset& supportedSymbolKinds);
 
 // Convert a index::SymbolKind to clangd::SymbolKind (LSP)
@@ -490,8 +490,8 @@ enum class OffsetEncoding
 	// Length counts codepoints in unicode text. (Clangd extension).
 	UTF32,
 };
-llvm::json::Value toJSON(const OffsetEncoding&);
-bool fromJSON(const llvm::json::Value&, OffsetEncoding&, llvm::json::Path);
+llvm::json::Value  toJSON(const OffsetEncoding&);
+bool			   fromJSON(const llvm::json::Value&, OffsetEncoding&, llvm::json::Path);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, OffsetEncoding);
 
 // Describes the content type that a client supports in various result literals
@@ -501,7 +501,7 @@ enum class MarkupKind
 	PlainText,
 	Markdown,
 };
-bool fromJSON(const llvm::json::Value&, MarkupKind&, llvm::json::Path);
+bool			   fromJSON(const llvm::json::Value&, MarkupKind&, llvm::json::Path);
 llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, MarkupKind);
 
 // This struct doesn't mirror LSP!
@@ -590,8 +590,8 @@ struct ClientCapabilities
 	/// textDocument.semanticHighlightingCapabilities.semanticHighlighting
 	bool TheiaSemanticHighlighting = false;
 
-  /// Supported encodings for LSP character offsets. (clangd extension).
-  std::optional<std::vector<OffsetEncoding>> offsetEncoding;
+	/// Supported encodings for LSP character offsets. (clangd extension).
+	std::optional<std::vector<OffsetEncoding>> offsetEncoding;
 
 	/// The content format that should be used for Hover requests.
 	/// textDocument.hover.contentEncoding
@@ -637,7 +637,7 @@ bool fromJSON(const llvm::json::Value&, ClientCapabilities&, llvm::json::Path);
 /// compilation database.
 struct ClangdCompileCommand
 {
-	std::string workingDirectory;
+	std::string				 workingDirectory;
 	std::vector<std::string> compilationCommand;
 };
 bool fromJSON(const llvm::json::Value&, ClangdCompileCommand&, llvm::json::Path);
@@ -674,7 +674,7 @@ bool fromJSON(const llvm::json::Value&, InitializationOptions&, llvm::json::Path
 
 struct ClientInfo
 {
-	std::string name;
+	std::string				   name;
 	std::optional<std::string> version;
 };
 bool fromJSON(const llvm::json::Value&, ClientInfo&, llvm::json::Path);
@@ -724,7 +724,8 @@ struct WorkDoneProgressCreateParams
 };
 llvm::json::Value toJSON(const WorkDoneProgressCreateParams& P);
 
-template <typename T> struct ProgressParams
+template <typename T>
+struct ProgressParams
 {
 	/// The progress token provided by the client or server.
 	llvm::json::Value token = nullptr;
@@ -941,9 +942,10 @@ struct DocumentRangeFormattingParams
 };
 bool fromJSON(const llvm::json::Value&, DocumentRangeFormattingParams&, llvm::json::Path);
 
-struct DocumentOnTypeFormattingParams {
-  /// The document to format.
-  TextDocumentIdentifier textDocument;
+struct DocumentOnTypeFormattingParams
+{
+	/// The document to format.
+	TextDocumentIdentifier textDocument;
 
 	/// The position at which this request was sent.
 	Position position;
@@ -1051,7 +1053,7 @@ struct Diagnostic
 };
 llvm::json::Value toJSON(const Diagnostic&);
 
-bool fromJSON(const llvm::json::Value&, Diagnostic&, llvm::json::Path);
+bool			   fromJSON(const llvm::json::Value&, Diagnostic&, llvm::json::Path);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const Diagnostic&);
 
 struct PublishDiagnosticsParams
@@ -1114,7 +1116,7 @@ struct WorkspaceEdit
 	/// AnnotatedTextEdit.
 	std::map<std::string, ChangeAnnotation> changeAnnotations;
 };
-bool fromJSON(const llvm::json::Value&, WorkspaceEdit&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, WorkspaceEdit&, llvm::json::Path);
 llvm::json::Value toJSON(const WorkspaceEdit& WE);
 
 /// Arguments for the 'applyTweak' command. The server sends these commands as a
@@ -1130,7 +1132,7 @@ struct TweakArgs
 	/// ID of the tweak that should be executed. Corresponds to Tweak::id().
 	std::string tweakID;
 };
-bool fromJSON(const llvm::json::Value&, TweakArgs&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, TweakArgs&, llvm::json::Path);
 llvm::json::Value toJSON(const TweakArgs& A);
 
 struct ExecuteCommandParams
@@ -1162,7 +1164,7 @@ struct CodeAction
 
 	/// The kind of the code action.
 	/// Used to filter code actions.
-	std::optional<std::string> kind;
+	std::optional<std::string>		 kind;
 	const static llvm::StringLiteral QUICKFIX_KIND;
 	const static llvm::StringLiteral REFACTOR_KIND;
 	const static llvm::StringLiteral INFO_KIND;
@@ -1218,7 +1220,7 @@ struct DocumentSymbol
 	std::vector<DocumentSymbol> children;
 };
 llvm::raw_ostream& operator<<(llvm::raw_ostream& O, const DocumentSymbol& S);
-llvm::json::Value toJSON(const DocumentSymbol& S);
+llvm::json::Value  toJSON(const DocumentSymbol& S);
 
 /// Represents information about programming constructs like variables, classes,
 /// interfaces etc.
@@ -1244,7 +1246,7 @@ struct SymbolInformation
 	/// This is a clangd extension, set only for workspace/symbol responses.
 	std::optional<float> score;
 };
-llvm::json::Value toJSON(const SymbolInformation&);
+llvm::json::Value  toJSON(const SymbolInformation&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const SymbolInformation&);
 
 /// Represents information about identifier.
@@ -1268,9 +1270,9 @@ struct SymbolDetails
 
 	std::optional<Location> definitionRange;
 };
-llvm::json::Value toJSON(const SymbolDetails&);
+llvm::json::Value  toJSON(const SymbolDetails&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const SymbolDetails&);
-bool operator==(const SymbolDetails&, const SymbolDetails&);
+bool			   operator==(const SymbolDetails&, const SymbolDetails&);
 
 /// The parameters of a Workspace Symbol Request.
 struct WorkspaceSymbolParams
@@ -1293,7 +1295,7 @@ llvm::json::Value toJSON(const ApplyWorkspaceEditParams&);
 
 struct ApplyWorkspaceEditResponse
 {
-	bool applied = true;
+	bool					   applied = true;
 	std::optional<std::string> failureReason;
 };
 bool fromJSON(const llvm::json::Value&, ApplyWorkspaceEditResponse&, llvm::json::Path);
@@ -1342,7 +1344,7 @@ bool fromJSON(const llvm::json::Value&, CompletionParams&, llvm::json::Path);
 
 struct MarkupContent
 {
-	MarkupKind kind = MarkupKind::PlainText;
+	MarkupKind	kind = MarkupKind::PlainText;
 	std::string value;
 };
 llvm::json::Value toJSON(const MarkupContent& MC);
@@ -1458,7 +1460,7 @@ struct CompletionItem
 	// data?: any - A data entry field that is preserved on a completion item
 	//              between a completion and a completion resolve request.
 };
-llvm::json::Value toJSON(const CompletionItem&);
+llvm::json::Value  toJSON(const CompletionItem&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const CompletionItem&);
 
 /// Remove the labelDetails field (for clients that don't support it).
@@ -1510,7 +1512,7 @@ struct SignatureInformation
 	/// The parameters of this signature.
 	std::vector<ParameterInformation> parameters;
 };
-llvm::json::Value toJSON(const SignatureInformation&);
+llvm::json::Value  toJSON(const SignatureInformation&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const SignatureInformation&);
 
 /// Represents the signature of a callable.
@@ -1546,7 +1548,7 @@ struct RenameParams
 	/// The new name of the symbol.
 	std::string newName;
 };
-bool fromJSON(const llvm::json::Value&, RenameParams&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, RenameParams&, llvm::json::Path);
 llvm::json::Value toJSON(const RenameParams&);
 
 struct PrepareRenameResult
@@ -1591,7 +1593,7 @@ struct DocumentHighlight
 		return LHS.kind == RHS.kind && LHS.range == RHS.range;
 	}
 };
-llvm::json::Value toJSON(const DocumentHighlight& DH);
+llvm::json::Value  toJSON(const DocumentHighlight& DH);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const DocumentHighlight&);
 
 enum class TypeHierarchyDirection
@@ -1665,11 +1667,11 @@ struct TypeHierarchyItem
 	/// This is a clangd exntesion.
 	std::optional<std::vector<TypeHierarchyItem>> children;
 };
-llvm::json::Value toJSON(const TypeHierarchyItem::ResolveParams&);
-bool fromJSON(const TypeHierarchyItem::ResolveParams&);
-llvm::json::Value toJSON(const TypeHierarchyItem&);
+llvm::json::Value  toJSON(const TypeHierarchyItem::ResolveParams&);
+bool			   fromJSON(const TypeHierarchyItem::ResolveParams&);
+llvm::json::Value  toJSON(const TypeHierarchyItem&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const TypeHierarchyItem&);
-bool fromJSON(const llvm::json::Value&, TypeHierarchyItem&, llvm::json::Path);
+bool			   fromJSON(const llvm::json::Value&, TypeHierarchyItem&, llvm::json::Path);
 
 /// Parameters for the `typeHierarchy/resolve` request.
 struct ResolveTypeHierarchyItemParams
@@ -1729,7 +1731,7 @@ struct CallHierarchyItem
 	std::string data;
 };
 llvm::json::Value toJSON(const CallHierarchyItem&);
-bool fromJSON(const llvm::json::Value&, CallHierarchyItem&, llvm::json::Path);
+bool			  fromJSON(const llvm::json::Value&, CallHierarchyItem&, llvm::json::Path);
 
 /// The parameter of a `callHierarchy/incomingCalls` request.
 struct CallHierarchyIncomingCallsParams
@@ -1871,9 +1873,9 @@ struct InlayHintLabelPart
 	/// might resolve this property late using the resolve request.
 	std::optional<Command> command;
 };
-llvm::json::Value toJSON(const InlayHintLabelPart&);
-bool operator==(const InlayHintLabelPart&, const InlayHintLabelPart&);
-bool operator<(const InlayHintLabelPart&, const InlayHintLabelPart&);
+llvm::json::Value  toJSON(const InlayHintLabelPart&);
+bool			   operator==(const InlayHintLabelPart&, const InlayHintLabelPart&);
+bool			   operator<(const InlayHintLabelPart&, const InlayHintLabelPart&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const InlayHintLabelPart&);
 
 /// Inlay hint information.
@@ -1916,9 +1918,9 @@ struct InlayHint
 	/// Join the label[].value together.
 	std::string joinLabels() const;
 };
-llvm::json::Value toJSON(const InlayHint&);
-bool operator==(const InlayHint&, const InlayHint&);
-bool operator<(const InlayHint&, const InlayHint&);
+llvm::json::Value  toJSON(const InlayHint&);
+bool			   operator==(const InlayHint&, const InlayHint&);
+bool			   operator<(const InlayHint&, const InlayHint&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, InlayHintKind);
 
 struct ReferenceContext
@@ -2004,8 +2006,8 @@ struct SemanticTokensEdit
 	// LSP specifies `start` and `deleteCount` which are relative to the array
 	// encoding of the previous tokens.
 	// We use token counts instead, and translate when serializing this struct.
-	unsigned startToken	  = 0;
-	unsigned deleteTokens = 0;
+	unsigned				   startToken	= 0;
+	unsigned				   deleteTokens = 0;
 	std::vector<SemanticToken> tokens; // encoded as a flat integer array
 };
 llvm::json::Value toJSON(const SemanticTokensEdit&);
@@ -2115,7 +2117,7 @@ struct FoldingRange
 	const static llvm::StringLiteral REGION_KIND;
 	const static llvm::StringLiteral COMMENT_KIND;
 	const static llvm::StringLiteral IMPORT_KIND;
-	std::string kind;
+	std::string						 kind;
 };
 llvm::json::Value toJSON(const FoldingRange& Range);
 
@@ -2179,7 +2181,7 @@ struct ASTNode
 	/// Nodes nested within this one, such as the operands of a BinaryOperator.
 	std::vector<ASTNode> children;
 };
-llvm::json::Value toJSON(const ASTNode&);
+llvm::json::Value  toJSON(const ASTNode&);
 llvm::raw_ostream& operator<<(llvm::raw_ostream&, const ASTNode&);
 
 } // namespace clangd
@@ -2187,21 +2189,22 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream&, const ASTNode&);
 
 namespace llvm {
 
-template <> struct DenseMapInfo<clang::clangd::Range>
+template <>
+struct DenseMapInfo<clang::clangd::Range>
 {
 	using Range = clang::clangd::Range;
 	static inline Range
 	getEmptyKey()
 	{
 		static clang::clangd::Position Tomb{ -1, -1 };
-		static Range R{ Tomb, Tomb };
+		static Range				   R{ Tomb, Tomb };
 		return R;
 	}
 	static inline Range
 	getTombstoneKey()
 	{
 		static clang::clangd::Position Tomb{ -2, -2 };
-		static Range R{ Tomb, Tomb };
+		static Range				   R{ Tomb, Tomb };
 		return R;
 	}
 	static unsigned
@@ -2216,7 +2219,8 @@ template <> struct DenseMapInfo<clang::clangd::Range>
 	}
 };
 
-template <> struct format_provider<clang::clangd::Position>
+template <>
+struct format_provider<clang::clangd::Position>
 {
 	static void
 	format(const clang::clangd::Position& Pos, raw_ostream& OS, StringRef Style)

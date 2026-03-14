@@ -1838,7 +1838,9 @@ HoverInfo::present() const
 		{
 			keepDivider = true;
 
-			output.heading(2U).text("⚠️ Warning");
+			output
+				.heading(2U)
+				.text("⚠️ Warning");
 
 			auto& list = output.list().compact();
 
@@ -1853,9 +1855,14 @@ HoverInfo::present() const
 		{
 			keepDivider = true;
 
-			output.heading(3U).text("Deprecated").strikethrough();
+			output
+				.heading(3U)
+				.text("Deprecated")
+				.strikethrough();
 
-			output.paragraph().text(parsed.deprecated);
+			output
+				.paragraph()
+				.text(parsed.deprecated);
 		}
 
 		/* Append a thick divider to separate warnings from the rest of the content */
@@ -1872,7 +1879,9 @@ HoverInfo::present() const
 			else
 				keepDivider = true;
 
-			output.heading(3U).text("Parameters");
+			output
+				.heading(3U)
+				.text("Parameters");
 
 			for (const auto& param : parsed.parameters)
 			{
@@ -1883,7 +1892,12 @@ HoverInfo::present() const
 					paragraph.code(std::to_string(param.specifiers)).space();
 				}
 
-				paragraph.code(param.name).space().text("→").space().text(param.description);
+				paragraph
+					.code(param.name)
+					.space()
+					.text("→")
+					.space()
+					.text(param.description);
 			}
 		}
 
@@ -1895,7 +1909,9 @@ HoverInfo::present() const
 			else
 				keepDivider = true;
 
-			output.heading(3U).text("Template Params");
+			output
+				.heading(3U)
+				.text("Template Params");
 
 			auto& list = output.list();
 
@@ -1939,7 +1955,9 @@ HoverInfo::present() const
 				else
 					keepDivider = true;
 
-				output.heading(3U).text("Returns");
+				output
+					.heading(3U)
+					.text("Returns");
 			}
 
 			auto& list = output.list();
@@ -1952,7 +1970,11 @@ HoverInfo::present() const
 
 				if (!val.empty())
 				{
-					item.space().text("→").space().text(val);
+					item
+						.space()
+						.text("→")
+						.space()
+						.text(val);
 				}
 			}
 		}
@@ -2028,42 +2050,33 @@ HoverInfo::present() const
 		}
 
 		/* Append any examples */
-		if (!parsed.examples.empty())
+		if (!parsed.codeExamples.empty())
 		{
 			if (keepDivider)
 				output.line();
 			else
 				keepDivider = true;
 
-			for (const auto& exp : parsed.examples)
+			for (const auto& exp : parsed.codeExamples)
 			{
-				output.heading(3U).text("Example");
+				output
+					.heading(3U)
+					.text("Example")
+					.space()
+					.code(exp.lang);
 
-				output.paragraph().text("{").bold();
+				output
+					.paragraph()
+					.text("{")
+					.bold();
 
-				output.codeBlock(exp.lang, c32::indentLines(exp.code));
+				output
+					.codeBlock(exp.lang, c32::indentLines(exp.code));
 
-				output.paragraph().text("}").bold();
-			}
-		}
-
-		/* Append any code blocks */
-		if (!parsed.codeBlocks.empty())
-		{
-			if (keepDivider)
-				output.line();
-			else
-				keepDivider = true;
-
-			for (const auto& codeBlock : parsed.codeBlocks)
-			{
-				output.heading(3U).text("Code");
-
-				output.paragraph().text("{").bold();
-
-				output.codeBlock(codeBlock.lang, c32::indentLines(codeBlock.code));
-
-				output.paragraph().text("}").bold();
+				output
+					.paragraph()
+					.text("}")
+					.bold();
 			}
 		}
 

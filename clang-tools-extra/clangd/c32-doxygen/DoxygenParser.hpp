@@ -13,13 +13,13 @@ struct ParameterTag
 		/// No specifier
 		None = (0),
 
-		/// [in]
+		/// `[in]`
 		In = (1 << 0),
 
-		/// [out]
+		/// `[out]`
 		Out = (1 << 1),
 
-		/// [in:optional], [out:optional]
+		/// `[in:opt]`, `[out:optional]`, etc.
 		Optional = (1 << 2)
 	};
 
@@ -29,31 +29,34 @@ struct ParameterTag
 	/// Description of the parameter
 	std::string description;
 
-	/// Data access specifiers (e.g., `[in]`, `[out]`, `[in:optional]`, etc.)
+	/// Data access specifiers (e.g., `[in]`, `[out]`, `[in:opt]`, etc.)
 	Specifier specifiers;
 
-	/// Resolved data type, set when a symbol matching this parameter is found
+	/// Resolved data type, set when a symbol matching this parameter is found for \m name
 	std::optional<std::string> type;
 
 	/// Resolved underlying data type, set when a symbol matching this parameter is found and has an underlying type
 	std::optional<std::string> typeAka;
 };
 
-struct CodeTag
+struct CodeExampleTag
 {
-	std::string lang;
-	std::string code;
-};
+	/// Name of the opening tag (e.g., "example", "code", etc.) since multiple tags map to this struct.
+	std::string name;
 
-struct ExampleTag
-{
+	/// Programming language of the code example
 	std::string lang;
+
+	/// Code content of the example
 	std::string code;
 };
 
 struct CustomTag
 {
+	/// Name of the custom tag
 	std::string name;
+
+	/// Body content of the custom tag
 	std::string body;
 };
 
@@ -90,23 +93,59 @@ struct ParsedDoxygen
 	/// Parsed from `^@version`
 	std::pair<std::string, std::string> version;
 
-	/// Parsed from `^@example`
-	std::vector<ExampleTag> examples;
-
-	/// Parsed from `^@code` ... `^@endcode`
-	std::vector<CodeTag> codeBlocks;
+	/// Parsed from `^@example` and `^@code`
+	std::vector<CodeExampleTag> codeExamples;
 };
 
+/**
+ * @brief
+ * 		Parse Doxygen comments from \p contents.
+ *
+ * @param[in] contents
+ * 		Contents to parse Doxygen comments from.
+ *
+ * @param[in] style
+ * 		Format style to use when parsing (for indentation, etc.)
+ *
+ * @returns
+ * 		%ParsedDoxygen struct with parsed Doxygen comments.
+ */
 ParsedDoxygen parse(std::string_view contents, const format::FormatStyle& style);
 
 // MARK: - Specifier Operators
 
+/**
+ * @brief
+ * 		Bitwise OR operator (`|`) for %ParameterTag::Specifier enum.
+ *
+ * @param[in] lhs
+ * 		Left-hand side specifier.
+ *
+ * @param[in] rhs
+ * 		Right-hand side specifier.
+ *
+ * @returns
+ * 		Result of the bitwise OR operation.
+ */
 inline ParameterTag::Specifier
 operator|(ParameterTag::Specifier lhs, ParameterTag::Specifier rhs)
 {
 	return static_cast<ParameterTag::Specifier>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
 }
 
+/**
+ * @brief
+ * 		Bitwise OR assignment operator (`|=`) for %ParameterTag::Specifier enum.
+ *
+ * @param[in,out] lhs
+ * 		Left-hand side specifier to be modified.
+ *
+ * @param[in] rhs
+ * 		Right-hand side specifier.
+ *
+ * @returns
+ * 		Modified left-hand side specifier after the bitwise OR operation.
+ */
 inline ParameterTag::Specifier&
 operator|=(ParameterTag::Specifier& lhs, ParameterTag::Specifier rhs)
 {
@@ -115,6 +154,19 @@ operator|=(ParameterTag::Specifier& lhs, ParameterTag::Specifier rhs)
 	return lhs;
 }
 
+/**
+ * @brief
+ * 		Bitwise AND operator (`&`) for %ParameterTag::Specifier enum.
+ *
+ * @param[in] lhs
+ * 		Left-hand side specifier.
+ *
+ * @param[in] rhs
+ * 		Right-hand side specifier.
+ *
+ * @returns
+ * 		Result of the bitwise AND operation.
+ */
 inline ParameterTag::Specifier
 operator&(ParameterTag::Specifier lhs, ParameterTag::Specifier rhs)
 {

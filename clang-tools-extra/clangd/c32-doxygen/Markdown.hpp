@@ -198,20 +198,21 @@ struct PlaintextRenderer : Renderer
 };
 
 /**
- * @brief Basic `Chunk` container that is used to build up markup content and
- * optionally customize the font with functions like `bold()` and `italic()`.
+ * @brief
+ * 		Basic \c ChunkContainer::Chunk container that is used to build up markup content and
+ * 		optionally customize the font with functions like `bold()` and `italic()`.
  *
  * The example below will produce:
  * 		- `Markdown` **Example Text**
  * 		- `Plaintext` Example Text
  *
- * @example[c] {
+ * @example[c]
  * 		Document doc;
  *
  * 		doc.paragraph()
  * 				.text("Example Text")
  * 				.bold();
- * }
+ * @end
  */
 template <typename Base>
 struct ChunkContainer
@@ -390,17 +391,18 @@ public:
 };
 
 /**
- * @brief Base container for all markup content. Each document consists
- * of multiple `Block` based classes.
+ * @brief
+ * 		Base container for all markup content. Each document consists
+ * 		of multiple %Block based classes.
  *
  * The current types are:
- * - **`Document`**
- * - `Heading`
- * - `Paragraph`
- * - `List`
- * - `Table`
- * - `CodeBlock`
- * - `BlockQuote`
+ * 		- **`Document`**
+ * 		- `Heading`
+ * 		- `Paragraph`
+ * 		- `List`
+ * 		- `Table`
+ * 		- `CodeBlock`
+ * 		- `BlockQuote`
  */
 struct Block
 {
@@ -409,9 +411,10 @@ struct Block
 };
 
 /**
- * @brief Heading for a `Document`.
+ * @brief
+ * 		Heading for a %Document.
  *
- * Use `Document::heading()` to create headings.
+ * Use %Document::heading() to create headings.
  */
 class Heading : public Block, public ChunkContainer<Heading>
 {
@@ -441,9 +444,10 @@ public:
 };
 
 /**
- * @brief Paragraph for a `Document`.
+ * @brief
+ * 		Paragraph for a %Document.
  *
- * Use `Document::paragraph()` to create paragraphs.
+ * Use %Document::paragraph() to create paragraphs.
  */
 class Paragraph : public Block, public ChunkContainer<Paragraph>
 {
@@ -452,18 +456,19 @@ class Paragraph : public Block, public ChunkContainer<Paragraph>
 	{
 		r.emitNewLine();
 
-		/// Render the chunks for this heading
+		/// Render the chunks for this paragraph
 		renderChunks(r);
 
-		/// Finish the heading with blank line to separate from other content
+		/// Finish the paragraph with blank line to separate from other content
 		r.emitNewLine();
 	}
 };
 
 /**
- * @brief Ordered (numerical) or unordered (bullet) lists for a `Document`.
+ * @brief
+ * 		Ordered (numerical) or unordered (bullet) lists for a %Document.
  *
- * Use `Document::list()` and `Document::list().item()` to add lists and items.
+ * Use %Document::list() and %Document::list().item() to add lists and items.
  */
 class List : public Block, public ChunkContainer<List>
 {
@@ -527,9 +532,10 @@ public:
 };
 
 /**
- * @brief Structured table for a `Document`.
+ * @brief
+ * 		Structured table for a %Document.
  *
- * Use `Document::table()` and `Document::row()[0U].text("...")`, etc. to add tables and rows to tables.
+ * Use %Document::table() and `Document::row()[0U].text("...")`, etc. to add tables and rows to tables.
  */
 class Table : public Block
 {
@@ -660,9 +666,10 @@ public:
 };
 
 /**
- * @brief Thematic break (line) for a `Document`.
+ * @brief
+ * 		Thematic break (line) for a %Document.
  *
- * Use `Document::line()` to add a thematic break to the document.
+ * Use %Document::line() to add a thematic break to the document.
  */
 class Line : public Block
 {
@@ -704,9 +711,10 @@ public:
 };
 
 /**
- * @brief Syntax highlighted code block for `Document`.
+ * @brief
+ * 		Syntax highlighted code block for %Document.
  *
- * Use `Document::codeBlock()` to add code with syntax highlighting to the document.
+ * Use %Document::codeBlock() to add code with syntax highlighting to the document.
  */
 class CodeBlock : public Block
 {
@@ -731,9 +739,10 @@ public:
 };
 
 /**
- * @brief Block quotes `Document`.
+ * @brief
+ * 		Block quotes %Document.
  *
- * Use `Document::blockQuote()` to add block quotes to the document.
+ * Use %Document::blockQuote() to add block quotes to the document.
  */
 class BlockQuote : public Block, public ChunkContainer<BlockQuote>
 {
@@ -752,9 +761,10 @@ public:
 };
 
 /**
- * @brief Base document to create markup content.
+ * @brief
+ * 		Base document to create markup content.
  *
- * @example[c] {
+ * @example[c]
  * 		Document doc;
  *
  * 		doc.heading(3)
@@ -775,8 +785,8 @@ public:
  *
  *		doc.line();
  *
- * 		doc.codeBlock("c", " int example_function() { printf("I will have syntax highlighting!"); } ");
- * }
+ * 		doc.codeBlock("c", " int example_function() { printf(\"I will have syntax highlighting!\"); } ");
+ * @end
  */
 class Document : public Block
 {

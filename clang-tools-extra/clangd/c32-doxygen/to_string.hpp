@@ -166,8 +166,8 @@ to_string(clang::clangd::c32::doxygen::TagType value)
 		case TagType::Deprecated:
 			return "Deprecated";
 
-		case TagType::EndCode:
-			return "EndCode";
+		case TagType::End:
+			return "End";
 
 		case TagType::Example:
 			return "Example";

@@ -1,8 +1,7 @@
 #include "DoxygenParser.hpp"
 #include "Doxygen.hpp"
 #include "Utils.hpp"
-
-#include "../Hover.h"
+#include "support/Logger.h"
 
 #include "clang/Format/Format.h"
 #include "clang/Tooling/Core/Replacement.h"
@@ -32,6 +31,7 @@ struct ParsedTag
 	/// Optional attributes specified in `[]` following the tag (e.g., `@param[in]`)
 	std::vector<std::string> attributes;
 
+	/// Body content of the tag
 	std::string body;
 };
 
@@ -58,7 +58,7 @@ const Flags space(false, false, true, false, false);
 const Flags breakTagOrEnd(true, false, false, true, true);
 const Flags spaceTagOrEnd(true, false, true, true, true);
 
-inline std::optional<size_t>
+std::optional<size_t>
 execute(std::string_view sv, Flags& flags)
 {
 	std::optional<size_t> ret = std::nullopt;
@@ -200,7 +200,7 @@ struct ConsumeContext
 		return offset + relative;
 	}
 
-	/// Advance the `working` view by `relative` chars (+1 if strip==true), and update `base`.
+	/// Advance the \m working view by `relative` chars (+1 if strip==true), and update \m offset.
 	void
 	advance(size_t relative, bool strip)
 	{
@@ -212,6 +212,7 @@ struct ConsumeContext
 			skip = working.size();
 
 		working.remove_prefix(skip);
+
 		offset = original.size() - working.size();
 	}
 };
@@ -303,6 +304,59 @@ consumeUntil(ConsumeContext& context, predicate::Flags predicate)
 	return trim(finalResult);
 }
 
+/**
+ * @brief
+ *    Consume content until explicit \c @end terminating tag is found.
+ *
+ * @param[in,out] context
+ *    Parse context; advances past the \c @end tag.
+ *
+ * @returns
+ *    Content between current position and \c @end, or rest of context if \c @end not found.
+ */
+std::optional<std::string>
+consumeUntilTerminatingTag(ConsumeContext& context)
+{
+	// Scan for the next block-level tag, looking specifically for @end
+	for (size_t i = 0U; i < context.working.size(); i++)
+	{
+		if (isEscaping(context.working, i))
+			continue;
+
+		if (!isDoxygenTagInitiator(context.working[i]))
+			continue;
+
+		if (auto t = getTag(context.working, i, TagContext::Block))
+		{
+			if (t->tag->flags.Inline)
+				continue;
+
+			// Found a block tag - extract content before it
+			auto piece = context.working.substr(0U, i);
+
+			if (t->tag->type == TagType::End)
+			{
+				// Properly terminated block - advance past @end
+				context.advance(i + t->consumed, false);
+
+				elog("Found end tag! - returning: '{0}'", trim(piece));
+
+				return trim(piece);
+			}
+
+			// Unexpected block tag (missing @end)
+			// Still extract up to this tag for robustness
+			context.advance(i, false);
+			return trim(piece);
+		}
+	}
+
+	// No terminating tag found - consume to EOF
+	auto piece = context.working;
+	context.advance(context.working.size(), false);
+	return trim(piece);
+}
+
 std::optional<std::string>
 consumeBetween(ConsumeContext& context, std::string_view lhs, std::string_view rhs, bool greedy, bool requireAtStart)
 {
@@ -324,7 +378,7 @@ consumeBetween(ConsumeContext& context, std::string_view lhs, std::string_view r
 
 	auto rhsPos = greedy ? context.working.rfind(rhs) : context.working.find(rhs, start);
 
-	/* `rhs` position must be found AFTER the position of `lhs` */
+	/// `rhs` position must be found AFTER the position of `lhs`
 	if (std::string_view::npos == rhsPos || rhsPos < start)
 		return std::nullopt;
 
@@ -351,17 +405,23 @@ consumeTag(ConsumeContext& context)
 	ret.type = tag->tag->type;
 	ret.name = properNounCase(tag->name);
 
-	auto predicate = predicate::breakTagOrEnd;
+	std::optional<std::string> consumedBody;
 
-	/* Enable tag terminator detection */
 	if (tag->tag->flags.HasTerminatingTag)
-		predicate.TAG_TERMINATOR = true;
+	{
+		/* Use explicit @end terminator */
+		consumedBody = consumeUntilTerminatingTag(context);
+	}
+	else
+	{
+		auto predicate = predicate::breakTagOrEnd;
 
-	/* Disable line-break detection */
-	if (tag->tag->flags.AllowLineBreaks)
-		predicate.BREAK = false;
+		/* Disable line-break detection */
+		if (tag->tag->flags.AllowLineBreaks)
+			predicate.BREAK = false;
 
-	auto consumedBody = consumeUntil(context, predicate);
+		consumedBody = consumeUntil(context, predicate);
+	}
 
 	if (!consumedBody)
 		return std::nullopt;
@@ -441,17 +501,12 @@ parse(std::string_view contents, const format::FormatStyle& style)
 				}
 
 				case TagType::Code:
+				case TagType::Example:
 				{
-					CodeTag t;
+					CodeExampleTag t;
 
-					ConsumeContext tagContext(tag->body);
-
-					auto code = consumeUntil(tagContext, predicate::tagOrEnd);
-
-					if (!code)
-						break;
-
-					auto printedCode = unescape(*code);
+					// tag->body already contains only the content between opener and @end
+					auto printedCode = unescape(tag->body);
 
 					if (tag->attributes.size() < 1U)
 						t.lang = "c";
@@ -467,7 +522,7 @@ parse(std::string_view contents, const format::FormatStyle& style)
 					else
 						t.code = printedCode;
 
-					doxygen.codeBlocks.push_back(std::move(t));
+					doxygen.codeExamples.push_back(std::move(t));
 					break;
 				}
 
@@ -480,37 +535,6 @@ parse(std::string_view contents, const format::FormatStyle& style)
 						break;
 
 					doxygen.deprecated = canon;
-					break;
-				}
-
-				case TagType::Example:
-				{
-					ExampleTag t;
-
-					ConsumeContext tagContext(tag->body);
-
-					auto code = consumeBetween(tagContext, "{", "}", true, false);
-
-					if (!code)
-						break;
-
-					auto printedCode = unescape(*code);
-
-					if (tag->attributes.size() < 1U)
-						t.lang = "c";
-					else
-						t.lang = tag->attributes.front();
-
-					tooling::Replacements replacements = reformat(style, printedCode, { tooling::Range(0, printedCode.size()) });
-
-					llvm::Expected<std::string> formatted = tooling::applyAllReplacements(printedCode, replacements);
-
-					if (formatted)
-						t.code = *formatted;
-					else
-						t.code = printedCode;
-
-					doxygen.examples.push_back(std::move(t));
 					break;
 				}
 
@@ -544,7 +568,7 @@ parse(std::string_view contents, const format::FormatStyle& style)
 						/* Only set the OPT bit when at least one directional specifier bit is set. */
 						if (ParameterTag::Specifier::None != t.specifiers)
 						{
-							if ("opt" == lower || "optional" == lower)
+							if ("opt" == lower)
 								t.specifiers |= ParameterTag::Specifier::Optional;
 						}
 					}

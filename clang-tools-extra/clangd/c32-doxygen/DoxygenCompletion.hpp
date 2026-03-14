@@ -12,35 +12,46 @@ namespace clang::clangd::c32::doxygen {
 
 struct CodeCompleteArgs
 {
+	/// Name of the file being completed
 	PathRef fileName;
 
+	/// Parsing inputs
 	const ParseInputs& parseInput;
 
+	/// Preamble data
 	const PreambleData* preamble;
 
+	/// Code completion options
 	CodeCompleteOptions opts;
 
+	/// Speculative fuzzy find instance
 	SpeculativeFuzzyFind* specFuzzyFind;
 
+	/// Contents being parsed
 	std::string_view contents;
 
+	/// Current cursor offset inside of \m contents
 	size_t offset;
 
+	/// Parsed AST for the file being completed
 	const ParsedAST* ast;
 };
 
 /**
- * @brief Offer code completion for Doxygen comments.
+ * @brief
+ * 		Offer code completion for Doxygen comments.
  *
  * @param[in] args
- * 		\r CodeCompleteArgs used internally
+ * 		%CodeCompleteArgs used internally
  *
- * @return \r CodeCompleteResult
+ * @returns
+ * 		%CodeCompleteResult struct with completion results.
  */
 CodeCompleteResult completion(const CodeCompleteArgs& args);
 
 /**
- * @brief Check if \p contents starting at \p cursorOffset is inside of a Doxygen comment.
+ * @brief
+ * 		Check if \p contents starting at \p cursorOffset is inside of a Doxygen comment.
  *
  * @param[in] contents
  * 		The contents being parsed.
@@ -56,6 +67,25 @@ CodeCompleteResult completion(const CodeCompleteArgs& args);
  */
 bool inDoxygenComment(std::string_view contents, size_t cursorOffset);
 
+/**
+ * @brief
+ * 		Determine if we should run Doxygen completion based on the trigger character and context.
+ *
+ * @param[in] contents
+ * 		The contents being parsed.
+ *
+ * @param[in] cursorOffset
+ * 		The user's current cursor offset inside of \p contents.
+ *
+ * @param[in] triggerCharacter
+ * 		The character that triggered the completion.
+ *
+ * @retval true
+ * 		Doxygen completion should be run.
+ *
+ * @retval false
+ * 		Doxygen completion should not be run.
+ */
 bool shouldRunCompletion(std::string_view contents, size_t cursorOffset, std::string_view triggerCharacter);
 
 } // namespace clang::clangd::c32::doxygen

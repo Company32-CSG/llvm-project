@@ -323,49 +323,41 @@ presentBrief(std::string contents)
 
 			for (const auto& customTag : parsed.customTags)
 			{
-				output.heading(3U).text(customTag.name);
+				output
+					.heading(3U)
+					.text(customTag.name);
 
-				output.paragraph().text(customTag.body);
+				output
+					.paragraph()
+					.text(customTag.body);
 			}
 		}
 
 		/* Append any examples */
-		if (!parsed.examples.empty())
+		if (!parsed.codeExamples.empty())
 		{
 			if (keepDivider)
 				output.line();
 			else
 				keepDivider = true;
 
-			for (const auto& exp : parsed.examples)
+			for (const auto& exp : parsed.codeExamples)
 			{
-				output.heading(3U).text("Example");
+				output
+					.heading(3U)
+					.text(exp.name);
 
-				output.paragraph().text("{").bold();
+				output
+					.paragraph()
+					.text("{")
+					.bold();
 
 				output.codeBlock(exp.lang, c32::indentLines(exp.code));
 
-				output.paragraph().text("}").bold();
-			}
-		}
-
-		/* Append any code blocks */
-		if (!parsed.codeBlocks.empty())
-		{
-			if (keepDivider)
-				output.line();
-			else
-				keepDivider = true;
-
-			for (const auto& codeBlock : parsed.codeBlocks)
-			{
-				output.heading(3U).text("Code");
-
-				output.paragraph().text("{").bold();
-
-				output.codeBlock(codeBlock.lang, c32::indentLines(codeBlock.code));
-
-				output.paragraph().text("}").bold();
+				output
+					.paragraph()
+					.text("}")
+					.bold();
 			}
 		}
 

@@ -17,13 +17,13 @@ const std::vector<DoxygenTag> TagList = {
 	{ TagType::B, TagParsingFlags(true, false, false), "b", "Render the argument following this tag in bold." },
 	{ TagType::Brief, TagParsingFlags(false, true), "brief", "Summary of documented symbol." },
 	{ TagType::C, TagParsingFlags(true, false, false), "c", "Render the argument following this tag in an inline code block." },
-	{ TagType::Code, TagParsingFlags(false, true, true), "code", "Marks the beginning of a code block." },
-	{ TagType::EndCode, TagParsingFlags(false, false), "endcode", "Marks the end of a code block." },
+	{ TagType::Code, TagParsingFlags(false, true, true), "code", "Marks the beginning of a code block. @code[<lang>] ... @end" },
+	{ TagType::End, TagParsingFlags(false, false), "end", "Marks the end of block." },
 	{ TagType::Deprecated, TagParsingFlags(false, false), "deprecated", "Mark usage of the documented symbol as deprecated." },
-	{ TagType::Example, TagParsingFlags(false, true), "example", "Example usage: @example[c] { ... }", { "usage" } },
+	{ TagType::Example, TagParsingFlags(false, true), "example", "Example usage code block: @example[<lang>] ... @end", { "usage" } },
 	{ TagType::Member, TagParsingFlags(true, false), "member", "Reference a member of the current class or struct.", { "m" } },
 	{ TagType::P, TagParsingFlags(true, false), "p", "Reference to a parameter defined by the @param tag.", { "pref" } },
-	{ TagType::Param, TagParsingFlags(false, false), "param", "Function parameter. Supports [in], [out], [in,out,optional], etc." },
+	{ TagType::Param, TagParsingFlags(false, false), "param", "Function parameter. Supports [in], [out], [in,out:optional], etc." },
 	{ TagType::Ref, TagParsingFlags(true, false), "ref", "Reference to a defined symbol.", { "r" } },
 	{ TagType::Returns, TagParsingFlags(false, false), "returns", "Description of return value.", { "return" } },
 	{ TagType::Retval, TagParsingFlags(false, false), "retval", "Description of a specific return value.", { "ret", "result" } },
@@ -69,7 +69,7 @@ const std::vector<DoxygenTag> TagList = {
 
 constexpr char TagInitiatorList[] = { '@', '\\', '%' };
 
-/* ------------------------------------------------------------ */
+// MARK: - Functions
 
 const llvm::ArrayRef<DoxygenTag>
 getAllTags()
@@ -103,6 +103,18 @@ const llvm::ArrayRef<char>
 getAllTagInitiators()
 {
 	return llvm::ArrayRef(TagInitiatorList, std::size(TagInitiatorList));
+}
+
+const DoxygenTag*
+getTagByType(TagType type)
+{
+	for (const auto& tag : TagList)
+	{
+		if (tag.type == type)
+			return &tag;
+	}
+
+	return nullptr;
 }
 
 bool
@@ -348,7 +360,7 @@ isTagTerminator(char c, bool isInline)
 	if (isInline)
 		ok |= ('(' == c || ')' == c || '[' == c || ']' == c || '{' == c || '}' == c || '^' == c || '\\' == c || '@' == c);
 
-	return !(ok);
+	return (false == ok);
 }
 
 } // namespace clang::clangd::c32::doxygen

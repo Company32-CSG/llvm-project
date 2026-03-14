@@ -7,6 +7,7 @@
 
 #include "../CodeComplete.h"
 #include "c32-doxygen/Markdown.hpp"
+#include "support/Logger.h"
 
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
@@ -32,6 +33,7 @@ enum class ContextKind
 	ParamName,
 	ParamAttr,
 	Reference,
+	MemberReference,
 	None
 };
 
@@ -61,7 +63,7 @@ struct CompletionContext
 	/// End position for LSP to insert our suggestion
 	size_t replaceEnd;
 
-	/// Existing attributes found when \m kind is \ref ContextKind::ParamAttr
+	/// Existing attributes found when \m kind is \r ContextKind::ParamAttr
 	std::vector<std::string> existingAttrs;
 };
 
@@ -201,6 +203,8 @@ buildTagItems(const DoxygenTag& tag, char initiator, const Range& completionRang
 const FunctionDecl*
 findOwningFunctionDecl(const ParsedAST* ast, size_t cursorOffset)
 {
+	typedef std::function<const FunctionDecl*(const DeclContext*)> fLookupFunc;
+
 	if (nullptr == ast)
 		return nullptr;
 
@@ -211,7 +215,7 @@ findOwningFunctionDecl(const ParsedAST* ast, size_t cursorOffset)
 
 	SourceLocation cursorLoc = SM.getLocForStartOfFile(mainID).getLocWithOffset(static_cast<int>(cursorOffset));
 
-	std::function<const FunctionDecl*(const DeclContext*)> lookup = [&](const DeclContext* DC) -> const FunctionDecl*
+	fLookupFunc lookup = [&](const DeclContext* DC) -> const FunctionDecl*
 	{
 		for (auto* D : DC->decls())
 		{
@@ -245,9 +249,81 @@ findOwningFunctionDecl(const ParsedAST* ast, size_t cursorOffset)
 	return lookup(Ctx.getTranslationUnitDecl());
 }
 
+const RecordDecl*
+findOwningRecordDecl(const ParsedAST* ast, size_t cursorOffset)
+{
+	if (ast == nullptr)
+		return nullptr;
+
+	auto& Ctx = ast->getASTContext();
+	auto& SM  = Ctx.getSourceManager();
+
+	FileID		   mainID = SM.getMainFileID();
+	SourceLocation cursorLoc =
+		SM.getLocForStartOfFile(mainID).getLocWithOffset(static_cast<int>(cursorOffset));
+
+	auto containsCursor = [&](SourceRange SR) -> bool
+	{
+		if (!SR.isValid())
+			return false;
+
+		if (!SM.isWrittenInSameFile(SR.getBegin(), cursorLoc))
+			return false;
+
+		return cursorLoc >= SR.getBegin() && cursorLoc <= SR.getEnd();
+	};
+
+	auto enclosingRecord = [](const Decl* D) -> const RecordDecl*
+	{
+		if (D == nullptr)
+			return nullptr;
+
+		/* If the decl itself is a record, return it directly. */
+		if (const auto* RD = llvm::dyn_cast<RecordDecl>(D))
+			return RD;
+
+		/* Otherwise walk upward through DeclContext to find nearest record. */
+		const DeclContext* DC = D->getDeclContext();
+		while (DC != nullptr)
+		{
+			if (const auto* RD = llvm::dyn_cast<RecordDecl>(DC))
+				return RD;
+
+			DC = DC->getParent();
+		}
+
+		return nullptr;
+	};
+
+	std::function<const RecordDecl*(const DeclContext*)> lookup =
+		[&](const DeclContext* DC) -> const RecordDecl*
+	{
+		for (const Decl* D : DC->decls())
+		{
+			/* Check whether this declaration owns a raw comment containing the cursor. */
+			if (const auto* RC = Ctx.getRawCommentForDeclNoCache(D))
+			{
+				if (containsCursor(RC->getSourceRange()))
+					return enclosingRecord(D);
+			}
+
+			/* Recurse into nested declaration contexts. */
+			if (const auto* nestedDC = llvm::dyn_cast<DeclContext>(D))
+			{
+				if (const RecordDecl* found = lookup(nestedDC))
+					return found;
+			}
+		}
+
+		return nullptr;
+	};
+
+	return lookup(Ctx.getTranslationUnitDecl());
+}
+
 // MARK: - Context Builder
 
-std::optional<CompletionContext>
+static std::optional<CompletionContext>
 buildContext(std::string_view contents, size_t cursorOffset)
 {
 	auto [tagPos, initiator] = rfindClosestTagInitiator(contents, cursorOffset);
@@ -255,7 +331,7 @@ buildContext(std::string_view contents, size_t cursorOffset)
 	if (std::string_view::npos == tagPos)
 		return std::nullopt;
 
-	/// Check if \r cursorOffset is adjacent to the end of \r tagPos.
+	/// Check if cursorOffset is adjacent to the end of tagPos.
 	auto isTagAdjacent = [&, &tagPos = tagPos, &initiator = initiator]()
 	{
 		bool   inSpace = false;
@@ -298,7 +374,11 @@ buildContext(std::string_view contents, size_t cursorOffset)
 		return true;
 	};
 
-	/* Ensure the cursor is directly to the right of the tag ('\r <cursor>' NOT '\r <existing arg> <cursor>') */
+	/**
+	 * Ensure the cursor is directly to the right of the tag
+	 * 		(e.g., '@someTag |' NOT '@someTag <existing arg> |')
+	 */
+
 	if (!isTagAdjacent())
 		return std::nullopt;
 
@@ -310,6 +390,11 @@ buildContext(std::string_view contents, size_t cursorOffset)
 	context.replaceBegin	 = cursorOffset;
 	context.replaceEnd		 = cursorOffset;
 
+	/// Helper to set the prefix and replacement range and trim whitespace
+	/// @param[in] begin
+	///			The beginning position of the range
+	/// @param[in] end
+	///			The ending position of the range
 	auto setPrefixRange = [&](size_t begin, size_t end)
 	{
 		if (end < begin)
@@ -330,21 +415,28 @@ buildContext(std::string_view contents, size_t cursorOffset)
 		context.replaceEnd	 = re;
 	};
 
-	if ('%' == initiator)
-	{
-		context.kind = ContextKind::Reference;
-
-		setPrefixRange(tagPos, cursorOffset);
-
-		return context;
-	}
-
+	/* Attempt to match the tag */
 	if (auto tag = getTag(contents.substr(tagPos), 0U, TagContext::Any))
 	{
 		size_t after = tagPos + tag->consumed;
 
 		context.matchedTag = *tag;
 
+		/* Handle the reference initiator shortcut ('%') since there is no delimiter (no space after '%') */
+		if (tag->tag->type == TagType::Ref && tag->initiator == '%')
+		{
+			context.kind = ContextKind::Reference;
+
+			setPrefixRange(after, cursorOffset);
+
+			return context;
+		}
+
+		/// Check if we are still typing the tag name itself
+		/// @retval true
+		/// 		We are still typing the tag name itself
+		/// @retval false
+		/// 		We have moved past the tag name and are typing the body/arguments
 		auto findTagBodyDelimiter = [&]() -> bool
 		{
 			for (size_t i = after; i < cursorOffset; i++)
@@ -361,6 +453,7 @@ buildContext(std::string_view contents, size_t cursorOffset)
 			return false;
 		};
 
+		/* Check if we are completing the tag itself */
 		if (!findTagBodyDelimiter())
 		{
 			context.kind = ContextKind::Tag;
@@ -370,6 +463,7 @@ buildContext(std::string_view contents, size_t cursorOffset)
 			return context;
 		}
 
+		/* We have a complete tag; see if we can offer completion for the tag's body */
 		switch (tag->tag->type)
 		{
 			case TagType::P:
@@ -396,7 +490,7 @@ buildContext(std::string_view contents, size_t cursorOffset)
 
 				if (auto bounds = findAttrBounds(contents, p))
 				{
-					/* We are inside `[...]` */
+					/** We are inside `[...]` */
 					if (cursorOffset > bounds->open && cursorOffset <= bounds->close)
 					{
 						size_t searchStart = bounds->open + 1U;
@@ -421,13 +515,13 @@ buildContext(std::string_view contents, size_t cursorOffset)
 						return context;
 					}
 
-					/* Skip past the entire `[...]` attribute block */
+					/// Skip past the entire `[...]` attribute block
 					p = skipSpace(contents, (bounds->close < contents.size()) ? bounds->close + 1U : bounds->close);
 				}
 
 				context.kind = ContextKind::ParamName;
 
-				/* Now, `p` should be at the param name (or whitespace before it) */
+				/** Now, `p` should be at the param name (or whitespace before it) */
 				if (cursorOffset <= p)
 				{
 					setPrefixRange(cursorOffset, cursorOffset);
@@ -458,10 +552,30 @@ buildContext(std::string_view contents, size_t cursorOffset)
 				return context;
 			}
 
+			case TagType::Member:
+			{
+				size_t p = skipSpace(contents, after);
+
+				context.kind = ContextKind::MemberReference;
+
+				if (cursorOffset <= p)
+				{
+					setPrefixRange(cursorOffset, cursorOffset);
+
+					return context;
+				}
+
+				setPrefixRange(p, cursorOffset);
+
+				return context;
+			}
+
 			default:
 				return std::nullopt;
 		}
 	}
+
+	/* Could not match tag; assume we are completing the tag itself */
 
 	context.kind = ContextKind::Tag;
 
@@ -504,7 +618,7 @@ completeTags(std::string_view contents, size_t cursorOffset, std::string_view pr
 			continue;
 		}
 
-		/* Does it match one of the tag's aliases? */
+		/// Does it match one of the tag's aliases?
 		for (const auto& alias : tag.aliases)
 		{
 			if (0U == alias.rfind(prefix, 0U))
@@ -523,7 +637,7 @@ completeTags(std::string_view contents, size_t cursorOffset, std::string_view pr
 CodeCompleteResult
 completeParamAttrs(const CompletionContext& context, std::string_view contents)
 {
-	static constexpr const char* Candidates[] = { "in", "out", "opt", "optional" };
+	static constexpr const char* Candidates[] = { "in", "out", "opt" };
 
 	CodeCompleteResult ret;
 
@@ -542,7 +656,10 @@ completeParamAttrs(const CompletionContext& context, std::string_view contents)
 			c.FilterText = candidate;
 			c.Kind		 = CompletionItemKind::EnumMember;
 
-			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
+			c.CompletionTokenRange = {
+				offsetToPosition(contents, context.replaceBegin),
+				offsetToPosition(contents, context.replaceEnd)
+			};
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -565,7 +682,10 @@ completeParamAttrs(const CompletionContext& context, std::string_view contents)
 			c.FilterText = candidate;
 			c.Kind		 = CompletionItemKind::EnumMember;
 
-			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
+			c.CompletionTokenRange = {
+				offsetToPosition(contents, context.replaceBegin),
+				offsetToPosition(contents, context.replaceEnd)
+			};
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -608,7 +728,10 @@ completeParamNames(const CompletionContext& context, std::string_view contents, 
 			c.FilterText = name;
 			c.Kind		 = CompletionItemKind::Variable;
 
-			c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
+			c.CompletionTokenRange = {
+				offsetToPosition(contents, context.replaceBegin),
+				offsetToPosition(contents, context.replaceEnd)
+			};
 
 			ret.Completions.push_back(std::move(c));
 		}
@@ -634,7 +757,10 @@ completeParamNames(const CompletionContext& context, std::string_view contents, 
 		c.FilterText = name;
 		c.Kind		 = CompletionItemKind::Variable;
 
-		c.CompletionTokenRange = { offsetToPosition(contents, context.replaceBegin), offsetToPosition(contents, context.replaceEnd) };
+		c.CompletionTokenRange = {
+			offsetToPosition(contents, context.replaceBegin),
+			offsetToPosition(contents, context.replaceEnd)
+		};
 
 		ret.Completions.push_back(std::move(c));
 	}
@@ -700,6 +826,50 @@ completeReferences(const CompletionContext& context, const CodeCompleteArgs& arg
 	return codeCompleteFlowHook(args.fileName, args.offset, args.preamble, args.parseInput, args.opts, args.specFuzzyFind, patchedContents);
 }
 
+CodeCompleteResult
+completeMemberReferences(const CompletionContext& context, std::string_view contents, const ParsedAST* ast)
+{
+	CodeCompleteResult ret;
+
+	if (nullptr == ast)
+		return ret;
+
+	const RecordDecl* record = findOwningRecordDecl(ast, context.cursorPos);
+
+	if (nullptr == record)
+	{
+		elog("No owning record found for member reference completion: '{0}'", context.prefix);
+		return ret;
+	}
+
+	const std::string_view prefix = context.prefix;
+
+	for (const FieldDecl* field : record->fields())
+	{
+		if (nullptr == field->getIdentifier())
+			continue;
+
+		std::string name = field->getName().str();
+
+		if (!prefix.empty() && name.rfind(prefix, 0U) != 0U)
+			continue;
+
+		CodeCompletion c;
+
+		c.Name				   = name;
+		c.FilterText		   = name;
+		c.Kind				   = CompletionItemKind::Field;
+		c.CompletionTokenRange = {
+			offsetToPosition(contents, context.replaceBegin),
+			offsetToPosition(contents, context.replaceEnd)
+		};
+
+		ret.Completions.push_back(std::move(c));
+	}
+
+	return ret;
+}
+
 } // namespace
 
 bool
@@ -731,7 +901,7 @@ inDoxygenComment(std::string_view contents, size_t cursorOffset)
 	bool startsWithThreeSlash = lineStartsWith(contents, cursorOffset, "///");
 	bool startsWithExclSlash  = lineStartsWith(contents, cursorOffset, "//!");
 
-	/* We are on a '///' or '//!' line */
+	/** We are on a '///' or '//!' line */
 	if (startsWithThreeSlash || startsWithExclSlash)
 		return true;
 
@@ -742,9 +912,6 @@ inDoxygenComment(std::string_view contents, size_t cursorOffset)
 bool
 shouldRunCompletion(std::string_view contents, size_t cursorOffset, std::string_view triggerCharacter)
 {
-	if (!inDoxygenComment(contents, cursorOffset))
-		return false;
-
 	auto context = buildContext(contents, cursorOffset);
 	if (!context)
 		return false;
@@ -805,6 +972,20 @@ shouldRunCompletion(std::string_view contents, size_t cursorOffset, std::string_
 			return !finishedToken;
 		}
 
+		case ContextKind::MemberReference:
+		{
+			if (manual)
+				return true;
+
+			if ('%' == trigger)
+				return true;
+
+			if (' ' == trigger)
+				return emptyPrefix;
+
+			return !finishedToken;
+		}
+
 		default:
 			return false;
 	}
@@ -837,6 +1018,9 @@ completion(const CodeCompleteArgs& args)
 
 		case ContextKind::Reference:
 			return completeReferences(*context, args);
+
+		case ContextKind::MemberReference:
+			return completeMemberReferences(*context, args.contents, args.ast);
 
 		default:
 			return empty;

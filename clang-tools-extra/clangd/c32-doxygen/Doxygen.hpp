@@ -22,11 +22,11 @@ enum class TagType
 	/// Concrete type for `^@c`
 	C,
 
-	/// Concrete type for `^@code` ... `^@endcode`
+	/// Concrete type for `^@code` ... `^@end`
 	Code,
 
-	/// Concrete type for `^@code` ... `^@endcode`
-	EndCode,
+	/// Concrete type for `^@end`
+	End,
 
 	/// Concrete type for `^@deprecated`
 	Deprecated,
@@ -61,7 +61,7 @@ enum class TagType
 	/// Concrete type for `^@version`
 	Version,
 
-	/// Concrete type for `^@warning`, `^@ret`
+	/// Concrete type for `^@warning`, `^@warn`
 	Warning,
 
 	/// Generic doxygen tag with no special handling
@@ -97,7 +97,7 @@ struct TagParsingFlags
 
 struct DoxygenTag
 {
-	/// Concrete `TagType` identifier for this tag
+	/// Concrete \r TagType identifier for this tag
 	TagType type;
 
 	/// How to parse this tag
@@ -117,108 +117,135 @@ struct DoxygenTag
 };
 
 /**
- * @brief Get all supported Doxygen tags.
+ * @brief
+ * 		Get all supported Doxygen tags.
  *
- * @returns Constant array of all supported `DoxygenTag` structs.
+ * @returns
+ * 		Constant array of all supported \r DoxygenTag structs.
  */
 const llvm::ArrayRef<DoxygenTag> getAllTags();
 
 /**
- * @brief Return a list of all supported Doxygen tag names including aliases.
+ * @brief
+ * 		Return a list of all supported Doxygen tag names including aliases.
  *
- * @returns Constant array of all supported Doxygen tag names and their aliases.
+ * @returns
+ * 		Constant array of all supported Doxygen tag names and their aliases.
  */
 const std::vector<std::string_view> getAllTagNames();
 
 /**
- * @brief Get all supported Doxygen tag initiators
+ * @brief
+ * 		Get all supported Doxygen tag initiators
  *
- * @returns Constant array of all supported Doxygen tag initiators (e.g., `[` `^@` `]`)
+ * @returns
+ * 		Constant array of all supported Doxygen tag initiators (e.g., `[` `^@` `]`)
  */
 const llvm::ArrayRef<char> getAllTagInitiators();
 
-// /**
-//  * @brief Build a `CodeCompleteResult` completion result for Doxygen tags. This provides Doxygen tag
-//  * 		support for things like ___intellisense___ in ___vscode___.
-//  *
-//  * @param[in] contents
-//  * 		Content the LSP got from our editor. This is guaranteed to be within a Doxygen comment
-//  * 		based on how we parse from the LSP server side of things.
-//  *
-//  * @param[in] offset
-//  *		The user's cursor offset within the comment.
-//  *
-//  * @returns Fully built `CodeCompleteResult` ready to be sent back to the editor.
-//  */
-// CodeCompleteResult tagCompletion(std::string_view contents, size_t offset);
+/**
+ * @brief
+ * 		Get a Doxygen tag by its concrete \r TagType.
+ *
+ * @param[in] type
+ * 		Concrete \r TagType to search for.
+ *
+ * @returns
+ * 		Pointer to the \r DoxygenTag that matches \p type, or nullptr
+ */
+const DoxygenTag* getTagByType(TagType type);
 
 /**
- * @brief Check if `contents` starting at `cursorOffset` is inside of a Doxygen comment.
+ * @brief
+ * 		Check if \p contents starting at \p cursorOffset is inside of a Doxygen comment.
  *
  * @param[in] contents
  * 		The contents being parsed.
  *
  * @param[in] cursorOffset
- * 		The user's current cursor offset inside of `contents`.
+ * 		The user's current cursor offset inside of \p contents.
  *
  * @retval true
- * 		The `cursorOffset` inside of `contents` is a Doxygen comment.
+ * 		The \p cursorOffset inside of \p contents is a Doxygen comment.
  *
  * @retval false
- * 		The `cursorOffset` inside of `contents` is not a Doxygen comment.
+ * 		The \p cursorOffset inside of \p contents is not a Doxygen comment.
  */
 bool inDoxygenComment(std::string_view contents, size_t cursorOffset);
 
 /**
- * @brief Check if the first character in `contents` is a supported Doxygen tag initiator.
+ * @brief
+ * 		Check if the first character in \p contents is a supported Doxygen tag initiator.
  *
  * @param[in] contents
  * 		String to check.
  *
  * @retval true
- * 		The first character of `contents` is a Doxygen tag initiator (e.g., `@`)
+ * 		The first character of \p contents is a Doxygen tag initiator (e.g., `@`)
  *
  * @retval false
- * 		The first character of `contents` did not match any supported Doxygen tag initiators.
+ * 		The first character of \p contents did not match any supported Doxygen tag initiators.
  */
 bool isDoxygenTagInitiator(std::string_view contents);
 
 /**
- * @brief Check if the character `c` is a supported Doxygen tag initiator.
+ * @brief
+ * 		Check if the character \p c is a supported Doxygen tag initiator.
  *
  * @param[in] c
  * 		Character to check.
  *
  * @retval true
- * 		The character `c` is a Doxygen tag initiator (e.g., `@`)
+ * 		The character \p c is a Doxygen tag initiator (e.g., `@`)
  *
  * @retval false
- * 		The character `c` did not match any supported Doxygen tag initiators.
+ * 		The character \p c did not match any supported Doxygen tag initiators.
  */
 bool isDoxygenTagInitiator(char c);
 
+/**
+ * @brief
+ * 		Get a Doxygen tag by its name or alias.
+ *
+ * @param[in] name
+ * 		Name or alias of the Doxygen tag to search for.
+ *
+ * @returns
+ * 		Pointer to the \r DoxygenTag that matches \p name, or nullptr
+ */
 const DoxygenTag* getDoxygenTagByName(std::string_view name);
 
+/**
+ * @brief
+ * 		Find the closest Doxygen tag initiator in \p contents.
+ *
+ * @param[in] contents
+ * 		Contents to search for the closest Doxygen tag initiator.
+ *
+ * @returns
+ * 		Pair containing the offset of the closest Doxygen tag initiator and the initiator character.
+ */
 std::pair<size_t, char> findClosestTagInitiator(std::string_view contents);
 
 // std::pair<size_t, char> rfindClosestTagInitiator(std::string_view contents, size_t offset);
 
 /**
- * @brief Checks if the character at `offset` has been escaped.
+ * @brief
+ * 		Checks if the character at \p offset has been escaped.
  *
  * @param[in] contents
- * 		Contents to check if the character before `offset` is escaped.
+ * 		Contents to check if the character before \p offset is escaped.
  *
  * @param[in] offset
- * 		Offset into `contents` to check.
+ * 		Offset into \p contents to check.
  *
  * @retval true
- * 		The character at `offset` is being escaped.
+ * 		The character at \p offset is being escaped.
  *
  * @retval false
- * 		The character at `offset` is ___not___ being escaped.
+ * 		The character at \p offset is \a not being escaped.
  *
- * @example[c] {
+ * @example[c]
  *		for (size_t i = 0U; i < sv.size(); i++)
  *		{
  *			for (const auto ini : getAllTagInitiators())
@@ -230,22 +257,53 @@ std::pair<size_t, char> findClosestTagInitiator(std::string_view contents);
  *					return i;
  *			}
  *		}
- * }
+ * @end
  */
 bool isEscaping(std::string_view contents, size_t offset);
 
 /**
- * @brief Check if the character `c` is an escape character.
+ * @brief
+ * 		Check if the character \p c is an escape character.
  *
  * @param[in] c
  * 		Character to compare against the Doxygen escape character.
  *
- * @returns Whether `c` is an escape character
+ * @retval true
+ * 		The character \p c is a Doxygen escape character.
+ *
+ * @retval false
+ * 		The character \p c is not a Doxygen escape character.
  */
 bool isDoxygenEscape(const char c);
 
+/**
+ * @brief
+ * 		Unescape a string by removing Doxygen escape characters.
+ *
+ * @param[in] sv
+ * 		String view to unescape.
+ *
+ * @returns
+ * 		Unescaped string.
+ */
 std::string unescape(std::string_view sv);
 
+/**
+ * @brief
+ * 		Check if a Doxygen tag at \p pos in \p sv starts a new line.
+ *
+ * @param[in] sv
+ * 		String view to check.
+ *
+ * @param[in] pos
+ * 		Position of the tag in \p sv.
+ *
+ * @retval true
+ * 		The tag at \p pos starts a new line.
+ *
+ * @retval false
+ * 		The tag at \p pos does not start a new line.
+ */
 bool tagStartsLine(std::string_view sv, size_t pos);
 
 struct MatchedTag
@@ -263,8 +321,40 @@ struct MatchedTag
 	const DoxygenTag* tag;
 };
 
+/**
+ * @brief
+ * 		Attempt to match a Doxygen tag at \p pos in \p sv.
+ *
+ * @param[in] sv
+ * 		String view to check.
+ *
+ * @param[in] pos
+ * 		Position in \p sv to check for a Doxygen tag.
+ *
+ * @param[in] context
+ * 		Tag context to limit the search to (e.g., Block tags only).
+ *
+ * @returns
+ * 		\r MatchedTag struct if a tag was found, or %std::nullopt if no tag was found.
+ */
 std::optional<MatchedTag> getTag(std::string_view sv, size_t pos, TagContext context);
 
+/**
+ * @brief
+ * 		Check if character \p c is a valid tag terminator.
+ *
+ * @param[in] c
+ * 		Character to check.
+ *
+ * @param[in] isInline
+ * 		Whether the tag being checked is an inline tag.
+ *
+ * @retval true
+ * 		\p c is a valid tag terminator.
+ *
+ * @retval false
+ * 		\p c is not a valid tag terminator.
+ */
 bool isTagTerminator(char c, bool isInline);
 
 } // namespace clang::clangd::c32::doxygen

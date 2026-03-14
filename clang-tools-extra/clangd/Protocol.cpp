@@ -53,9 +53,9 @@ URIForFile::canonicalize(llvm::StringRef AbsPath, llvm::StringRef TUPath)
 	{
 		elog("URIForFile: failed to resolve path {0} with TU path {1}: "
 			 "{2}.\nUsing unresolved path.",
-			AbsPath,
-			TUPath,
-			Resolved.takeError());
+			 AbsPath,
+			 TUPath,
+			 Resolved.takeError());
 		return URIForFile(std::string(AbsPath));
 	}
 	return URIForFile(std::move(*Resolved));
@@ -418,192 +418,230 @@ indexSymbolKindToSymbolKind(index::SymbolKind Kind)
 	llvm_unreachable("invalid symbol kind");
 }
 
-bool fromJSON(const llvm::json::Value &Params, ClientCapabilities &R,
-              llvm::json::Path P) {
-  const llvm::json::Object *O = Params.getAsObject();
-  if (!O) {
-    P.report("expected object");
-    return false;
-  }
-  if (auto *TextDocument = O->getObject("textDocument")) {
-    if (auto *SemanticHighlighting =
-            TextDocument->getObject("semanticHighlightingCapabilities")) {
-      if (auto SemanticHighlightingSupport =
-              SemanticHighlighting->getBoolean("semanticHighlighting"))
-        R.TheiaSemanticHighlighting = *SemanticHighlightingSupport;
-    }
-    if (auto *InactiveRegions =
-            TextDocument->getObject("inactiveRegionsCapabilities")) {
-      if (auto InactiveRegionsSupport =
-              InactiveRegions->getBoolean("inactiveRegions")) {
-        R.InactiveRegions = *InactiveRegionsSupport;
-      }
-    }
-    if (TextDocument->getObject("semanticTokens"))
-      R.SemanticTokens = true;
-    if (auto *Diagnostics = TextDocument->getObject("publishDiagnostics")) {
-      if (auto CategorySupport = Diagnostics->getBoolean("categorySupport"))
-        R.DiagnosticCategory = *CategorySupport;
-      if (auto CodeActions = Diagnostics->getBoolean("codeActionsInline"))
-        R.DiagnosticFixes = *CodeActions;
-      if (auto RelatedInfo = Diagnostics->getBoolean("relatedInformation"))
-        R.DiagnosticRelatedInformation = *RelatedInfo;
-    }
-    if (auto *References = TextDocument->getObject("references"))
-      if (auto ContainerSupport = References->getBoolean("container"))
-        R.ReferenceContainer = *ContainerSupport;
-    if (auto *Completion = TextDocument->getObject("completion")) {
-      if (auto *Item = Completion->getObject("completionItem")) {
-        if (auto SnippetSupport = Item->getBoolean("snippetSupport"))
-          R.CompletionSnippets = *SnippetSupport;
-        if (auto LabelDetailsSupport = Item->getBoolean("labelDetailsSupport"))
-          R.CompletionLabelDetail = *LabelDetailsSupport;
-        if (const auto *DocumentationFormat =
-                Item->getArray("documentationFormat")) {
-          for (const auto &Format : *DocumentationFormat) {
-            if (fromJSON(Format, R.CompletionDocumentationFormat, P))
-              break;
-          }
-        }
-      }
-      if (auto *ItemKind = Completion->getObject("completionItemKind")) {
-        if (auto *ValueSet = ItemKind->get("valueSet")) {
-          R.CompletionItemKinds.emplace();
-          if (!fromJSON(*ValueSet, *R.CompletionItemKinds,
-                        P.field("textDocument")
-                            .field("completion")
-                            .field("completionItemKind")
-                            .field("valueSet")))
-            return false;
-        }
-      }
-      if (auto EditsNearCursor = Completion->getBoolean("editsNearCursor"))
-        R.CompletionFixes = *EditsNearCursor;
-    }
-    if (auto *CodeAction = TextDocument->getObject("codeAction")) {
-      if (CodeAction->getObject("codeActionLiteralSupport"))
-        R.CodeActionStructure = true;
-    }
-    if (auto *DocumentSymbol = TextDocument->getObject("documentSymbol")) {
-      if (auto HierarchicalSupport =
-              DocumentSymbol->getBoolean("hierarchicalDocumentSymbolSupport"))
-        R.HierarchicalDocumentSymbol = *HierarchicalSupport;
-    }
-    if (auto *Hover = TextDocument->getObject("hover")) {
-      if (auto *ContentFormat = Hover->getArray("contentFormat")) {
-        for (const auto &Format : *ContentFormat) {
-          if (fromJSON(Format, R.HoverContentFormat, P))
-            break;
-        }
-      }
-    }
-    if (auto *Help = TextDocument->getObject("signatureHelp")) {
-      R.HasSignatureHelp = true;
-      if (auto *Info = Help->getObject("signatureInformation")) {
-        if (auto *Parameter = Info->getObject("parameterInformation")) {
-          if (auto OffsetSupport = Parameter->getBoolean("labelOffsetSupport"))
-            R.OffsetsInSignatureHelp = *OffsetSupport;
-        }
-        if (const auto *DocumentationFormat =
-                Info->getArray("documentationFormat")) {
-          for (const auto &Format : *DocumentationFormat) {
-            if (fromJSON(Format, R.SignatureHelpDocumentationFormat, P))
-              break;
-          }
-        }
-      }
-    }
-    if (auto *Folding = TextDocument->getObject("foldingRange")) {
-      if (auto LineFolding = Folding->getBoolean("lineFoldingOnly"))
-        R.LineFoldingOnly = *LineFolding;
-    }
-    if (auto *Rename = TextDocument->getObject("rename")) {
-      if (auto RenameSupport = Rename->getBoolean("prepareSupport"))
-        R.RenamePrepareSupport = *RenameSupport;
-    }
-  }
-  if (auto *Workspace = O->getObject("workspace")) {
-    if (auto *Symbol = Workspace->getObject("symbol")) {
-      if (auto *SymbolKind = Symbol->getObject("symbolKind")) {
-        if (auto *ValueSet = SymbolKind->get("valueSet")) {
-          R.WorkspaceSymbolKinds.emplace();
-          if (!fromJSON(*ValueSet, *R.WorkspaceSymbolKinds,
-                        P.field("workspace")
-                            .field("symbol")
-                            .field("symbolKind")
-                            .field("valueSet")))
-            return false;
-        }
-      }
-    }
-    if (auto *SemanticTokens = Workspace->getObject("semanticTokens")) {
-      if (auto RefreshSupport = SemanticTokens->getBoolean("refreshSupport"))
-        R.SemanticTokenRefreshSupport = *RefreshSupport;
-    }
-    if (auto *WorkspaceEdit = Workspace->getObject("workspaceEdit")) {
-      if (auto DocumentChanges = WorkspaceEdit->getBoolean("documentChanges"))
-        R.DocumentChanges = *DocumentChanges;
-      if (WorkspaceEdit->getObject("changeAnnotationSupport")) {
-        R.ChangeAnnotation = true;
-      }
-    }
-  }
-  if (auto *Window = O->getObject("window")) {
-    if (auto WorkDoneProgress = Window->getBoolean("workDoneProgress"))
-      R.WorkDoneProgress = *WorkDoneProgress;
-    if (auto Implicit = Window->getBoolean("implicitWorkDoneProgressCreate"))
-      R.ImplicitProgressCreation = *Implicit;
-  }
-  if (auto *General = O->getObject("general")) {
-    if (auto *StaleRequestSupport = General->getObject("staleRequestSupport")) {
-      if (auto Cancel = StaleRequestSupport->getBoolean("cancel"))
-        R.CancelsStaleRequests = *Cancel;
-    }
-  }
-  if (auto *OffsetEncoding = O->get("offsetEncoding")) {
-    R.offsetEncoding.emplace();
-    if (!fromJSON(*OffsetEncoding, *R.offsetEncoding,
-                  P.field("offsetEncoding")))
-      return false;
-  }
+bool
+fromJSON(const llvm::json::Value& Params, ClientCapabilities& R, llvm::json::Path P)
+{
+	const llvm::json::Object* O = Params.getAsObject();
+	if (!O)
+	{
+		P.report("expected object");
+		return false;
+	}
+	if (auto* TextDocument = O->getObject("textDocument"))
+	{
+		if (auto* SemanticHighlighting =
+				TextDocument->getObject("semanticHighlightingCapabilities"))
+		{
+			if (auto SemanticHighlightingSupport =
+					SemanticHighlighting->getBoolean("semanticHighlighting"))
+				R.TheiaSemanticHighlighting = *SemanticHighlightingSupport;
+		}
+		if (auto* InactiveRegions =
+				TextDocument->getObject("inactiveRegionsCapabilities"))
+		{
+			if (auto InactiveRegionsSupport =
+					InactiveRegions->getBoolean("inactiveRegions"))
+			{
+				R.InactiveRegions = *InactiveRegionsSupport;
+			}
+		}
+		if (TextDocument->getObject("semanticTokens"))
+			R.SemanticTokens = true;
+		if (auto* Diagnostics = TextDocument->getObject("publishDiagnostics"))
+		{
+			if (auto CategorySupport = Diagnostics->getBoolean("categorySupport"))
+				R.DiagnosticCategory = *CategorySupport;
+			if (auto CodeActions = Diagnostics->getBoolean("codeActionsInline"))
+				R.DiagnosticFixes = *CodeActions;
+			if (auto RelatedInfo = Diagnostics->getBoolean("relatedInformation"))
+				R.DiagnosticRelatedInformation = *RelatedInfo;
+		}
+		if (auto* References = TextDocument->getObject("references"))
+			if (auto ContainerSupport = References->getBoolean("container"))
+				R.ReferenceContainer = *ContainerSupport;
+		if (auto* Completion = TextDocument->getObject("completion"))
+		{
+			if (auto* Item = Completion->getObject("completionItem"))
+			{
+				if (auto SnippetSupport = Item->getBoolean("snippetSupport"))
+					R.CompletionSnippets = *SnippetSupport;
+				if (auto LabelDetailsSupport = Item->getBoolean("labelDetailsSupport"))
+					R.CompletionLabelDetail = *LabelDetailsSupport;
+				if (const auto* DocumentationFormat =
+						Item->getArray("documentationFormat"))
+				{
+					for (const auto& Format : *DocumentationFormat)
+					{
+						if (fromJSON(Format, R.CompletionDocumentationFormat, P))
+							break;
+					}
+				}
+			}
+			if (auto* ItemKind = Completion->getObject("completionItemKind"))
+			{
+				if (auto* ValueSet = ItemKind->get("valueSet"))
+				{
+					R.CompletionItemKinds.emplace();
+					if (!fromJSON(*ValueSet, *R.CompletionItemKinds, P.field("textDocument").field("completion").field("completionItemKind").field("valueSet")))
+						return false;
+				}
+			}
+			if (auto EditsNearCursor = Completion->getBoolean("editsNearCursor"))
+				R.CompletionFixes = *EditsNearCursor;
+		}
+		if (auto* CodeAction = TextDocument->getObject("codeAction"))
+		{
+			if (CodeAction->getObject("codeActionLiteralSupport"))
+				R.CodeActionStructure = true;
+		}
+		if (auto* DocumentSymbol = TextDocument->getObject("documentSymbol"))
+		{
+			if (auto HierarchicalSupport =
+					DocumentSymbol->getBoolean("hierarchicalDocumentSymbolSupport"))
+				R.HierarchicalDocumentSymbol = *HierarchicalSupport;
+		}
+		if (auto* Hover = TextDocument->getObject("hover"))
+		{
+			if (auto* ContentFormat = Hover->getArray("contentFormat"))
+			{
+				for (const auto& Format : *ContentFormat)
+				{
+					if (fromJSON(Format, R.HoverContentFormat, P))
+						break;
+				}
+			}
+		}
+		if (auto* Help = TextDocument->getObject("signatureHelp"))
+		{
+			R.HasSignatureHelp = true;
+			if (auto* Info = Help->getObject("signatureInformation"))
+			{
+				if (auto* Parameter = Info->getObject("parameterInformation"))
+				{
+					if (auto OffsetSupport = Parameter->getBoolean("labelOffsetSupport"))
+						R.OffsetsInSignatureHelp = *OffsetSupport;
+				}
+				if (const auto* DocumentationFormat =
+						Info->getArray("documentationFormat"))
+				{
+					for (const auto& Format : *DocumentationFormat)
+					{
+						if (fromJSON(Format, R.SignatureHelpDocumentationFormat, P))
+							break;
+					}
+				}
+			}
+		}
+		if (auto* Folding = TextDocument->getObject("foldingRange"))
+		{
+			if (auto LineFolding = Folding->getBoolean("lineFoldingOnly"))
+				R.LineFoldingOnly = *LineFolding;
+		}
+		if (auto* Rename = TextDocument->getObject("rename"))
+		{
+			if (auto RenameSupport = Rename->getBoolean("prepareSupport"))
+				R.RenamePrepareSupport = *RenameSupport;
+		}
+	}
+	if (auto* Workspace = O->getObject("workspace"))
+	{
+		if (auto* Symbol = Workspace->getObject("symbol"))
+		{
+			if (auto* SymbolKind = Symbol->getObject("symbolKind"))
+			{
+				if (auto* ValueSet = SymbolKind->get("valueSet"))
+				{
+					R.WorkspaceSymbolKinds.emplace();
+					if (!fromJSON(*ValueSet, *R.WorkspaceSymbolKinds, P.field("workspace").field("symbol").field("symbolKind").field("valueSet")))
+						return false;
+				}
+			}
+		}
+		if (auto* SemanticTokens = Workspace->getObject("semanticTokens"))
+		{
+			if (auto RefreshSupport = SemanticTokens->getBoolean("refreshSupport"))
+				R.SemanticTokenRefreshSupport = *RefreshSupport;
+		}
+		if (auto* WorkspaceEdit = Workspace->getObject("workspaceEdit"))
+		{
+			if (auto DocumentChanges = WorkspaceEdit->getBoolean("documentChanges"))
+				R.DocumentChanges = *DocumentChanges;
+			if (WorkspaceEdit->getObject("changeAnnotationSupport"))
+			{
+				R.ChangeAnnotation = true;
+			}
+		}
+	}
+	if (auto* Window = O->getObject("window"))
+	{
+		if (auto WorkDoneProgress = Window->getBoolean("workDoneProgress"))
+			R.WorkDoneProgress = *WorkDoneProgress;
+		if (auto Implicit = Window->getBoolean("implicitWorkDoneProgressCreate"))
+			R.ImplicitProgressCreation = *Implicit;
+	}
+	if (auto* General = O->getObject("general"))
+	{
+		if (auto* StaleRequestSupport = General->getObject("staleRequestSupport"))
+		{
+			if (auto Cancel = StaleRequestSupport->getBoolean("cancel"))
+				R.CancelsStaleRequests = *Cancel;
+		}
+	}
+	if (auto* OffsetEncoding = O->get("offsetEncoding"))
+	{
+		R.offsetEncoding.emplace();
+		if (!fromJSON(*OffsetEncoding, *R.offsetEncoding, P.field("offsetEncoding")))
+			return false;
+	}
 
-  if (auto *Experimental = O->getObject("experimental")) {
-    if (auto *TextDocument = Experimental->getObject("textDocument")) {
-      if (auto *Completion = TextDocument->getObject("completion")) {
-        if (auto EditsNearCursor = Completion->getBoolean("editsNearCursor"))
-          R.CompletionFixes |= *EditsNearCursor;
-      }
-      if (auto *References = TextDocument->getObject("references")) {
-        if (auto ContainerSupport = References->getBoolean("container")) {
-          R.ReferenceContainer |= *ContainerSupport;
-        }
-      }
-      if (auto *Diagnostics = TextDocument->getObject("publishDiagnostics")) {
-        if (auto CodeActions = Diagnostics->getBoolean("codeActionsInline")) {
-          R.DiagnosticFixes |= *CodeActions;
-        }
-      }
-      if (auto *InactiveRegions =
-              TextDocument->getObject("inactiveRegionsCapabilities")) {
-        if (auto InactiveRegionsSupport =
-                InactiveRegions->getBoolean("inactiveRegions")) {
-          R.InactiveRegions |= *InactiveRegionsSupport;
-        }
-      }
-    }
-    if (auto *Window = Experimental->getObject("window")) {
-      if (auto Implicit =
-              Window->getBoolean("implicitWorkDoneProgressCreate")) {
-        R.ImplicitProgressCreation |= *Implicit;
-      }
-    }
-    if (auto *OffsetEncoding = Experimental->get("offsetEncoding")) {
-      R.offsetEncoding.emplace();
-      if (!fromJSON(*OffsetEncoding, *R.offsetEncoding,
-                    P.field("offsetEncoding")))
-        return false;
-    }
-  }
+	if (auto* Experimental = O->getObject("experimental"))
+	{
+		if (auto* TextDocument = Experimental->getObject("textDocument"))
+		{
+			if (auto* Completion = TextDocument->getObject("completion"))
+			{
+				if (auto EditsNearCursor = Completion->getBoolean("editsNearCursor"))
+					R.CompletionFixes |= *EditsNearCursor;
+			}
+			if (auto* References = TextDocument->getObject("references"))
+			{
+				if (auto ContainerSupport = References->getBoolean("container"))
+				{
+					R.ReferenceContainer |= *ContainerSupport;
+				}
+			}
+			if (auto* Diagnostics = TextDocument->getObject("publishDiagnostics"))
+			{
+				if (auto CodeActions = Diagnostics->getBoolean("codeActionsInline"))
+				{
+					R.DiagnosticFixes |= *CodeActions;
+				}
+			}
+			if (auto* InactiveRegions =
+					TextDocument->getObject("inactiveRegionsCapabilities"))
+			{
+				if (auto InactiveRegionsSupport =
+						InactiveRegions->getBoolean("inactiveRegions"))
+				{
+					R.InactiveRegions |= *InactiveRegionsSupport;
+				}
+			}
+		}
+		if (auto* Window = Experimental->getObject("window"))
+		{
+			if (auto Implicit =
+					Window->getBoolean("implicitWorkDoneProgressCreate"))
+			{
+				R.ImplicitProgressCreation |= *Implicit;
+			}
+		}
+		if (auto* OffsetEncoding = Experimental->get("offsetEncoding"))
+		{
+			R.offsetEncoding.emplace();
+			if (!fromJSON(*OffsetEncoding, *R.offsetEncoding, P.field("offsetEncoding")))
+				return false;
+		}
+	}
 
 	return true;
 }
@@ -748,10 +786,11 @@ fromJSON(const llvm::json::Value& Params, TextDocumentContentChangeEvent& R, llv
 	return O && O.map("range", R.range) && O.map("rangeLength", R.rangeLength) && O.map("text", R.text);
 }
 
-bool fromJSON(const llvm::json::Value &Params, DocumentRangeFormattingParams &R,
-              llvm::json::Path P) {
-  llvm::json::ObjectMapper O(Params, P);
-  return O && O.map("textDocument", R.textDocument) && O.map("range", R.range);
+bool
+fromJSON(const llvm::json::Value& Params, DocumentRangeFormattingParams& R, llvm::json::Path P)
+{
+	llvm::json::ObjectMapper O(Params, P);
+	return O && O.map("textDocument", R.textDocument) && O.map("range", R.range);
 }
 
 bool
@@ -1113,7 +1152,7 @@ bool
 fromJSON(const llvm::json::Value& Params, CompletionContext& R, llvm::json::Path P)
 {
 	llvm::json::ObjectMapper O(Params, P);
-	int TriggerKind;
+	int						 TriggerKind;
 	if (!O || !O.map("triggerKind", TriggerKind) || !mapOptOrNull(Params, "triggerCharacter", R.triggerCharacter, P))
 		return false;
 	R.triggerKind = static_cast<CompletionTriggerKind>(TriggerKind);
@@ -1616,7 +1655,7 @@ bool
 fromJSON(const llvm::json::Value& Params, ReferenceParams& R, llvm::json::Path P)
 {
 	TextDocumentPositionParams& Base = R;
-	llvm::json::ObjectMapper O(Params, P);
+	llvm::json::ObjectMapper	O(Params, P);
 	return fromJSON(Params, Base, P) && O && O.mapOptional("context", R.context);
 }
 
@@ -1705,7 +1744,7 @@ llvm::json::Value
 toJSON(const InlayHint& H)
 {
 	llvm::json::Object Result{ { "position", H.position }, { "label", H.label }, { "paddingLeft", H.paddingLeft }, { "paddingRight", H.paddingRight } };
-	auto K = toJSON(H.kind);
+	auto			   K = toJSON(H.kind);
 	if (!K.getAsNull())
 		Result["kind"] = std::move(K);
 	return std::move(Result);
@@ -1723,7 +1762,9 @@ operator<(const InlayHint& A, const InlayHint& B)
 std::string
 InlayHint::joinLabels() const
 {
-	return llvm::join(llvm::map_range(label, [](auto& L) { return L.value; }), "");
+	return llvm::join(llvm::map_range(label, [](auto& L)
+									  { return L.value; }),
+					  "");
 }
 
 llvm::raw_ostream&
@@ -1883,8 +1924,8 @@ llvm::json::Value
 toJSON(const MemoryTree& MT)
 {
 	llvm::json::Object Out;
-	int64_t Total = MT.self();
-	Out["_self"]  = Total;
+	int64_t			   Total = MT.self();
+	Out["_self"]			 = Total;
 	for (const auto& Entry : MT.children())
 	{
 		auto Child = toJSON(Entry.getSecond());
