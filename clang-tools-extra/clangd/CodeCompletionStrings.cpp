@@ -103,6 +103,16 @@ std::string getDeclComment(const ASTContext &Ctx, const NamedDecl &Decl) {
   const RawComment *RC = getCompletionComment(Ctx, &Decl);
   if (!RC)
     return "";
+  // MARK: - C32 Begin
+  const auto &SM = Ctx.getSourceManager();
+  auto DL = SM.getSpellingLineNumber(Decl.getLocation());
+  auto CL = SM.getSpellingLineNumber(RC->getEndLoc());
+  // Only accept the comment if attached directly to the symbol.
+  // This avoids attaching comments to a symbol where the comment was
+  // actually defined for another symbol above.
+  if (DL != (CL + 1U))
+    return "";
+  // MARK: - C32 End
   // Sanity check that the comment does not come from the PCH. We choose to not
   // write them into PCH, because they are racy and slow to load.
   assert(!Ctx.getSourceManager().isLoadedSourceLocation(RC->getBeginLoc()));

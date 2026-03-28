@@ -50,7 +50,7 @@ CodeCompleteResult completion(const CodeCompleteArgs &Args);
 
 /**
  * @brief
- * 		Check if \p contents starting at \p cursorOffset is inside of a
+ * 		Check if \p Contents starting at \p CursorOffset is inside of a
  * Doxygen comment.
  *
  * @param[in] Contents

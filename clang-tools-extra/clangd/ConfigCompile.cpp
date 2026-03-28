@@ -764,7 +764,6 @@ struct FragmentCompiler {
   }
   // MARK: - C32 Begin
   void compile(Fragment::C32Block &&F) { compile(std::move(F.Hover)); }
-
   void compile(Fragment::C32Block::HoverBlock &&F) {
     if (F.ShowHoveringOver)
       Out.Apply.push_back(
@@ -801,7 +800,6 @@ struct FragmentCompiler {
           });
   }
   // MARK: - C32 End
-
   constexpr static llvm::SourceMgr::DiagKind Error = llvm::SourceMgr::DK_Error;
   constexpr static llvm::SourceMgr::DiagKind Warning =
       llvm::SourceMgr::DK_Warning;

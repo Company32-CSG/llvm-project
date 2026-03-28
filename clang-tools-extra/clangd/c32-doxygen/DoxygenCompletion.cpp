@@ -1,12 +1,11 @@
-#include "DoxygenCompletion.hpp"
+#include "c32-doxygen/DoxygenCompletion.hpp"
+#include "c32-doxygen/Doxygen.hpp"
+#include "c32-doxygen/Markdown.hpp"
+#include "c32-doxygen/Utils.hpp"
 
-#include "Doxygen.hpp"
+#include "CodeComplete.h"
 #include "Protocol.h"
 #include "SourceCode.h"
-#include "Utils.hpp"
-
-#include "../CodeComplete.h"
-#include "c32-doxygen/Markdown.hpp"
 #include "support/Logger.h"
 
 #include "clang/AST/Decl.h"

@@ -198,7 +198,21 @@ MarkupContent renderDoc(const markup::Document &Doc, MarkupKind Kind) {
   }
   return Result;
 }
-
+// MARK: - C32 Begin
+MarkupContent renderDoc(const c32::markdown::Document &Doc, MarkupKind Kind) {
+  MarkupContent Result;
+  Result.kind = Kind;
+  switch (Kind) {
+  case MarkupKind::PlainText:
+    Result.value.append(Doc.plaintext());
+    break;
+  case MarkupKind::Markdown:
+    Result.value.append(Doc.markdown());
+    break;
+  }
+  return Result;
+}
+// MARK: - C32 End
 Symbol::IncludeDirective insertionDirective(const CodeCompleteOptions &Opts) {
   if (!Opts.ImportInsertions || !Opts.MainFileSignals)
     return Symbol::IncludeDirective::Include;
@@ -2270,16 +2284,27 @@ CodeCompleteResult codeComplete(PathRef FileName, Position Pos,
   }
 
   auto Content = llvm::StringRef(ParseInput.Contents).take_front(*Offset);
-  if (auto OffsetBeforeComment = maybeFunctionArgumentCommentStart(Content)) {
-    // We are doing code completion of a comment, where we currently only
-    // support completing param names in function calls. To do this, we
-    // require information from Sema, but Sema's comment completion stops at
-    // parsing, so we must move back the position before running it, extract
-    // information we need and construct completion items ourselves.
-    auto CommentPrefix = Content.substr(*OffsetBeforeComment + 2).trim();
-    return codeCompleteComment(FileName, *OffsetBeforeComment, CommentPrefix,
-                               Preamble, ParseInput);
-  }
+
+  // MARK: - C32 Begin
+  if (auto Result =
+          c32::maybeCompleteDoxygenComment(FileName, ParseInput, Preamble, Opts,
+                                           SpecFuzzyFind, *Offset, Content))
+    return std::move(*Result);
+  //   if (auto OffsetBeforeComment =
+  //   maybeFunctionArgumentCommentStart(Content)) {
+  //     // We are doing code completion of a comment, where we currently only
+  //     // support completing param names in function calls. To do this, we
+  //     // require information from Sema, but Sema's comment completion stops
+  //     at
+  //     // parsing, so we must move back the position before running it,
+  //     extract
+  //     // information we need and construct completion items ourselves.
+  //     auto CommentPrefix = Content.substr(*OffsetBeforeComment + 2).trim();
+  //     return codeCompleteComment(FileName, *OffsetBeforeComment,
+  //     CommentPrefix,
+  //                                Preamble, ParseInput);
+  //   }
+  // MARK: - C32 End
 
   auto Flow = CodeCompleteFlow(
       FileName, Preamble ? Preamble->Includes : IncludeStructure(),
@@ -2477,6 +2502,246 @@ bool allowImplicitCompletion(llvm::StringRef Content, unsigned Offset) {
   return !Content.empty() && (isAsciiIdentifierContinue(Content.back()) ||
                               !llvm::isASCII(Content.back()));
 }
+// MARK: - C32 Begin
+namespace c32 {
 
+markdown::Document presentBrief(std::string contents) {
+  markdown::Document output;
+
+  if (!contents.empty()) {
+    auto parsed = c32::doxygen::parse(contents, format::getGNUStyle());
+
+    bool keepDivider = false;
+
+    /* Append the brief/description */
+    if (!parsed.brief.empty()) {
+      output.paragraph().text(parsed.brief);
+    }
+
+    /* Append untagged user lines */
+    if (!parsed.untaggedLines.empty()) {
+      auto &paragraph = output.paragraph();
+
+      for (const auto &line : parsed.untaggedLines) {
+        paragraph.text(line).newline();
+      }
+    }
+
+    /* Divider between the hover's heading with signature+brief and the rest */
+    auto &divider = output.line();
+
+    /* Append all warning tags */
+    if (!parsed.warnings.empty()) {
+      keepDivider = true;
+
+      output.heading(2U).text("⚠️ Warning");
+
+      auto &list = output.list().compact();
+
+      for (const auto &warning : parsed.warnings) {
+        list.item().text(warning).italic();
+      }
+    }
+
+    /* Append deprecated warning */
+    if (!parsed.deprecated.empty()) {
+      keepDivider = true;
+
+      output.heading(3U).text("Deprecated").strikethrough();
+
+      output.paragraph().text(parsed.deprecated);
+    }
+
+    /* Append a thick divider to separate warnings from the rest of the content
+     */
+    if (!parsed.warnings.empty() || !parsed.deprecated.empty()) {
+      output.line();
+    }
+
+    /* Append function parameters */
+    if (!parsed.parameters.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      output.heading(3U).text("Parameters");
+
+      for (const auto &param : parsed.parameters) {
+        auto &paragraph = output.paragraph();
+
+        if (c32::doxygen::ParameterTag::Specifier::None != param.specifiers) {
+          paragraph.code(std::to_string(param.specifiers)).space();
+        }
+
+        paragraph.code(param.name)
+            .space()
+            .text("→")
+            .space()
+            .text(param.description);
+      }
+    }
+
+    /* Append the collected @throw/@throws tags */
+    if (!parsed.tparams.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      output.heading(3U).text("Template Params");
+
+      auto &list = output.list();
+
+      for (const auto &[key, val] : llvm::reverse(parsed.tparams)) {
+        auto &item = list.item();
+
+        item.code(key).bold();
+
+        if (!val.empty()) {
+          item.space().text("→").space().text(val);
+        }
+      }
+    }
+
+    /* Append the return type description */
+    if (!parsed.returns.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      output.heading(3U).text("Returns");
+      output.paragraph().text(parsed.returns);
+    }
+
+    /* Append the collected @retval/@result tags */
+    if (!parsed.retvals.empty()) {
+      /* Add the 'Returns' heading if the user didn't specify a @returns tag */
+      if (parsed.returns.empty()) {
+        if (keepDivider)
+          output.line();
+        else
+          keepDivider = true;
+
+        output.heading(3U).text("Returns");
+      }
+
+      auto &list = output.list();
+
+      for (const auto &[key, val] : llvm::reverse(parsed.retvals)) {
+        auto &item = list.item();
+
+        item.code(key).bold();
+
+        if (!val.empty()) {
+          item.space().text("→").space().text(val);
+        }
+      }
+    }
+
+    /* Append the collected @throw/@throws tags */
+    if (!parsed.throws.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      output.heading(3U).text("Throws");
+
+      auto &list = output.list();
+
+      for (const auto &[key, val] : llvm::reverse(parsed.throws)) {
+        auto &item = list.item();
+
+        item.code(key).bold();
+
+        if (!val.empty()) {
+          item.space().text("→").space().text(val);
+        }
+      }
+    }
+
+    /* Append the @version/@available/@availability tag */
+    if (!parsed.version.first.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      output.heading(3U).text("Availability");
+
+      auto &paragraph = output.paragraph();
+
+      paragraph.code(parsed.version.first);
+
+      if (!parsed.version.second.empty()) {
+        paragraph.space().text("→").space().text(parsed.version.second);
+      }
+    }
+
+    /* Append custom Doxygen tags that we don't intercept */
+    if (!parsed.customTags.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      for (const auto &customTag : parsed.customTags) {
+        output.heading(3U).text(customTag.name);
+
+        output.paragraph().text(customTag.body);
+      }
+    }
+
+    /* Append any examples */
+    if (!parsed.codeExamples.empty()) {
+      if (keepDivider)
+        output.line();
+      else
+        keepDivider = true;
+
+      for (const auto &exp : parsed.codeExamples) {
+        output.heading(3U).text(exp.name);
+
+        output.paragraph().text("{").bold();
+
+        output.codeBlock(exp.lang, c32::indentLines(exp.code));
+
+        output.paragraph().text("}").bold();
+      }
+    }
+
+    if (!keepDivider)
+      divider.thickness(0U);
+  }
+
+  return output;
+}
+
+CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
+                                        const PreambleData *Preamble,
+                                        const ParseInputs &ParseInput,
+                                        CodeCompleteOptions Opts,
+                                        SpeculativeFuzzyFind *SpecFuzzyFind,
+                                        std::string_view PatchedContents) {
+  CodeCompleteFlow Flow(FileName,
+                        Preamble ? Preamble->Includes : IncludeStructure(),
+                        SpecFuzzyFind, Opts);
+
+  ParseInputs ParseInputPatch = ParseInput;
+  ParseInputPatch.Contents = PatchedContents;
+
+  auto Patch =
+      PreamblePatch::createFullPatch(FileName, ParseInputPatch, *Preamble);
+
+  return (!Preamble || Opts.RunParser == CodeCompleteOptions::NeverParse)
+             ? std::move(Flow).runWithoutSema(ParseInputPatch.Contents, Offset,
+                                              *ParseInputPatch.TFS)
+             : std::move(Flow).run(
+                   {FileName, Offset, *Preamble, Patch, ParseInputPatch});
+}
+} // namespace c32
+// MARK: - C32 End
 } // namespace clangd
 } // namespace clang

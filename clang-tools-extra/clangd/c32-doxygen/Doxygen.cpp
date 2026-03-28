@@ -28,7 +28,7 @@ const std::vector<DoxygenTag> TagList = {
     {TagType::Deprecated, TagParsingFlags(false, false), "deprecated",
      "Mark usage of the documented symbol as deprecated."},
     {TagType::Example,
-     TagParsingFlags(false, true),
+     TagParsingFlags(false, true, true),
      "example",
      "Example usage code block: @example[<lang>] ... @end",
      {"usage"}},

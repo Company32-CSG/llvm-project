@@ -310,9 +310,6 @@ std::optional<std::string> consumeUntilTerminatingTag(ConsumeContext &Context) {
       if (T->Tag->Type == TagType::End) {
         // Properly terminated block - advance past @end
         Context.advance(I + T->Consumed, false);
-
-        elog("Found end tag! - returning: '{0}'", trim(Piece));
-
         return trim(Piece);
       }
 

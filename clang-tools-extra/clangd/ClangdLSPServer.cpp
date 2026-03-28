@@ -1789,6 +1789,11 @@ bool ClangdLSPServer::shouldRunCompletion(
          Params.position, Params.textDocument.uri.file());
     return true;
   }
+  // MARK: - C32 Begin
+  if (c32::doxygen::inDoxygenComment(*Code, *Offset))
+    return c32::doxygen::shouldRunCompletion(*Code, *Offset,
+                                             Params.context.triggerCharacter);
+  // MARK: - C32 End
   return allowImplicitCompletion(*Code, *Offset);
 }
 

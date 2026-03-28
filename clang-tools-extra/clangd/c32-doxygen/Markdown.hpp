@@ -141,10 +141,9 @@ struct PlaintextRenderer : Renderer {
  * @end
  */
 template <typename Base> struct ChunkContainer {
-public:
+private:
   enum class ChunkKind { Text, Code, Link, Space, Newline, Blankline };
 
-private:
   struct Chunk {
     ChunkKind Kind;
 

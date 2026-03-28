@@ -315,7 +315,6 @@ private:
 
     Dict.parse(N);
   }
-
   void parse(Fragment::C32Block::HoverBlock &F, Node &N) {
     DictParser Dict("Hover", this);
 
@@ -345,7 +344,6 @@ private:
     Dict.parse(N);
   }
   // MARK: - C32 End
-
   // Helper for parsing mapping nodes (dictionaries).
   // We don't use YamlIO as we want to control over unknown keys.
   class DictParser {
