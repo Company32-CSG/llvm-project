@@ -177,6 +177,46 @@ struct Config {
     /// Controls highlighting modifiers that are disabled.
     std::vector<std::string> DisabledModifiers;
   } SemanticTokens;
+  // MARK: - C32 Begin
+  struct {
+    struct {
+      /// Show the 'Hovering Over' information in hover. This shows the
+      /// symbol type that is being hovered over.
+      bool ShowHoveringOver = false;
+
+      /// Show which heder file has provided the respective symbol
+      bool ShowProvider = true;
+
+      /// Show the namespace and scope where applicable for the respective
+      /// symbol
+      bool ShowScope = false;
+
+      /// Show details about field/struct/class size, offset, and alignment
+      bool ShowSizeAndOffset = false;
+
+      /// Show what files are provided by a header when hovering over `#include`
+      /// directives
+      bool ShowProvidedSymbols = true;
+
+      /// Show information about how a value is being passed to a function.
+      ///
+      /// @note
+      /// Given this function:
+      ///
+      /// > `void my_name(std::string name_value)`
+      ///
+      /// Called:
+      ///
+      /// > `my_name("Moe")`
+      ///
+      /// Hovering over `"Moe"` would produce:
+      ///
+      /// > Passing `string-literal` as `name_value` (converted to
+      /// `std::string`)
+      bool ShowCalleeInfo = true;
+    } Hover;
+  } C32;
+  // MARK: - C32 End
 };
 
 } // namespace clangd

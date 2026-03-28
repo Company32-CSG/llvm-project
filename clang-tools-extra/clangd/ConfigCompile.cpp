@@ -198,6 +198,9 @@ struct FragmentCompiler {
     compile(std::move(F.InlayHints));
     compile(std::move(F.SemanticTokens));
     compile(std::move(F.Style));
+    // MARK: - C32 Begin
+    compile(std::move(F.C32));
+    // MARK: - C32 End
   }
 
   void compile(Fragment::IfBlock &&F) {
@@ -552,10 +555,10 @@ struct FragmentCompiler {
       auto Fast = isFastTidyCheck(Str);
       if (!Fast.has_value()) {
         diag(Warning,
-             llvm::formatv(
-                 "Latency of clang-tidy check '{0}' is not known. "
-                 "It will only run if ClangTidy.FastCheckFilter is Loose or None",
-                 Str)
+             llvm::formatv("Latency of clang-tidy check '{0}' is not known. "
+                           "It will only run if ClangTidy.FastCheckFilter is "
+                           "Loose or None",
+                           Str)
                  .str(),
              Arg.Range);
       } else if (!*Fast) {
@@ -759,7 +762,44 @@ struct FragmentCompiler {
       });
     }
   }
+  // MARK: - C32 Begin
+  void compile(Fragment::C32Block &&F) { compile(std::move(F.Hover)); }
+  void compile(Fragment::C32Block::HoverBlock &&F) {
+    if (F.ShowHoveringOver)
+      Out.Apply.push_back(
+          [Value(**F.ShowHoveringOver)](const Params &, Config &C) {
+            C.C32.Hover.ShowHoveringOver = Value;
+          });
 
+    if (F.ShowProvider)
+      Out.Apply.push_back([Value(**F.ShowProvider)](const Params &, Config &C) {
+        C.C32.Hover.ShowProvider = Value;
+      });
+
+    if (F.ShowScope)
+      Out.Apply.push_back([Value(**F.ShowScope)](const Params &, Config &C) {
+        C.C32.Hover.ShowScope = Value;
+      });
+
+    if (F.ShowSizeAndOffset)
+      Out.Apply.push_back(
+          [Value(**F.ShowSizeAndOffset)](const Params &, Config &C) {
+            C.C32.Hover.ShowSizeAndOffset = Value;
+          });
+
+    if (F.ShowProvidedSymbols)
+      Out.Apply.push_back(
+          [Value(**F.ShowProvidedSymbols)](const Params &, Config &C) {
+            C.C32.Hover.ShowProvidedSymbols = Value;
+          });
+
+    if (F.ShowCalleeInfo)
+      Out.Apply.push_back(
+          [Value(**F.ShowCalleeInfo)](const Params &, Config &C) {
+            C.C32.Hover.ShowCalleeInfo = Value;
+          });
+  }
+  // MARK: - C32 End
   constexpr static llvm::SourceMgr::DiagKind Error = llvm::SourceMgr::DK_Error;
   constexpr static llvm::SourceMgr::DiagKind Warning =
       llvm::SourceMgr::DK_Warning;
