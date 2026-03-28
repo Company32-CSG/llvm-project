@@ -33,7 +33,6 @@
 #include <future>
 #include <optional>
 #include <utility>
-
 namespace clang {
 class NamedDecl;
 namespace clangd {
@@ -336,7 +335,6 @@ CompletionPrefix guessCompletionPrefix(llvm::StringRef Content,
 // Whether it makes sense to complete at the point based on typed characters.
 // For instance, we implicitly trigger at `a->^` but not at `a>^`.
 bool allowImplicitCompletion(llvm::StringRef Content, unsigned Offset);
-
 } // namespace clangd
 } // namespace clang
 

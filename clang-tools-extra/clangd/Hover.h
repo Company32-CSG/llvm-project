@@ -120,6 +120,73 @@ struct HoverInfo {
   // alphabetical order.
   std::vector<std::string> UsedSymbolNames;
 
+  // MARK: - C32 Begin
+  struct EnhancedInfo {
+    struct UsedSymbol {
+      index::SymbolKind Kind;
+      std::string Name;
+
+      /// Set for variables only
+      std::optional<PrintedType> Type;
+
+      bool isFunction() const {
+        switch (Kind) {
+        case index::SymbolKind::Function:
+        case index::SymbolKind::InstanceMethod:
+        case index::SymbolKind::ClassMethod:
+        case index::SymbolKind::StaticMethod:
+        case index::SymbolKind::Constructor:
+        case index::SymbolKind::Destructor:
+        case index::SymbolKind::ConversionFunction:
+          return true;
+        default:
+          return false;
+        }
+      }
+
+      friend bool operator<(const UsedSymbol &LHS, const UsedSymbol &RHS) {
+        if (LHS.Kind != RHS.Kind)
+          return LHS.Kind < RHS.Kind;
+
+        return LHS.Name < RHS.Name;
+      }
+
+      friend bool operator==(const UsedSymbol &LHS, const UsedSymbol &RHS) {
+        return LHS.Kind == RHS.Kind && LHS.Name == RHS.Name;
+      }
+    };
+
+    struct EnumMember {
+      std::string Name;
+      std::string Value;
+      std::string Expr;
+    };
+
+    format::FormatStyle Style;
+
+    /// When `Kind` is `SymbolKind::TypeAlias` this reflects the real type.
+    std::optional<index::SymbolKind> UnderlyingKind;
+
+    /// Set for macros; expanded view of the macro
+    std::optional<std::string> Expanded;
+
+    std::optional<std::string> ParentEnumName;
+
+    std::optional<std::vector<EnumMember>> EnumMembers;
+
+    std::vector<UsedSymbol> ProvidedSymbols;
+
+    inline index::SymbolKind concreteKind(index::SymbolKind ForKind) const {
+      if (index::SymbolKind::TypeAlias == ForKind) {
+        if (auto Underlying = UnderlyingKind)
+          return *Underlying;
+      }
+
+      return ForKind;
+    }
+  };
+  EnhancedInfo EnhancedInfo;
+  // MARK: - C32 End
   /// Produce a user-readable information based on the specified markup kind.
   std::string present(MarkupKind Kind) const;
 

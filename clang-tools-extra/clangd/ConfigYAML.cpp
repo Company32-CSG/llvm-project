@@ -70,6 +70,9 @@ public:
     Dict.handle("InlayHints", [&](Node &N) { parse(F.InlayHints, N); });
     Dict.handle("SemanticTokens", [&](Node &N) { parse(F.SemanticTokens, N); });
     Dict.handle("Documentation", [&](Node &N) { parse(F.Documentation, N); });
+    // MARK: - C32 Begin
+    Dict.handle("C32", [&](Node &N) { parse(F.C32, N); });
+    // MARK: - C32 End
     Dict.parse(N);
     return !(N.failed() || HadError);
   }
@@ -329,7 +332,49 @@ private:
     });
     Dict.parse(N);
   }
+  // MARK: - C32 Begin
+  void parse(Fragment::C32Block &F, Node &N) {
+    DictParser Dict("C32", this);
 
+    Dict.handle("Hover", [&](Node &N) {
+      Fragment::C32Block::HoverBlock Hover;
+
+      parse(Hover, N);
+
+      F.Hover = std::move(Hover);
+    });
+
+    Dict.parse(N);
+  }
+  void parse(Fragment::C32Block::HoverBlock &F, Node &N) {
+    DictParser Dict("Hover", this);
+
+    Dict.handle("ShowHoveringOver", [&](Node &N) {
+      F.ShowHoveringOver = boolValue(N, "ShowHoveringOver");
+    });
+
+    Dict.handle("ShowProvider", [&](Node &N) {
+      F.ShowProvider = boolValue(N, "ShowProvider");
+    });
+
+    Dict.handle("ShowScope",
+                [&](Node &N) { F.ShowScope = boolValue(N, "ShowScope"); });
+
+    Dict.handle("ShowSizeAndOffset", [&](Node &N) {
+      F.ShowSizeAndOffset = boolValue(N, "ShowSizeAndOffset");
+    });
+
+    Dict.handle("ShowProvidedSymbols", [&](Node &N) {
+      F.ShowProvidedSymbols = boolValue(N, "ShowProvidedSymbols");
+    });
+
+    Dict.handle("ShowCalleeInfo", [&](Node &N) {
+      F.ShowCalleeInfo = boolValue(N, "ShowCalleeInfo");
+    });
+
+    Dict.parse(N);
+  }
+  // MARK: - C32 End
   // Helper for parsing mapping nodes (dictionaries).
   // We don't use YamlIO as we want to control over unknown keys.
   class DictParser {

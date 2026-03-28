@@ -412,6 +412,49 @@ struct Fragment {
     std::optional<Located<std::string>> CommentFormat;
   };
   DocumentationBlock Documentation;
+  // MARK: - C32 Begin
+  /// C32 extensions
+  struct C32Block {
+    struct HoverBlock {
+      /// Show the 'Hovering Over' information in hover. This shows the
+      /// symbol type that is being hovered over.
+      std::optional<Located<bool>> ShowHoveringOver;
+
+      /// Show which heder file has provided the respective symbol
+      std::optional<Located<bool>> ShowProvider;
+
+      /// Show the namespace and scope where applicable for the respective
+      /// symbol
+      std::optional<Located<bool>> ShowScope;
+
+      /// Show details about field/struct/class size, offset, and alignment
+      std::optional<Located<bool>> ShowSizeAndOffset;
+
+      /// Show what files are provided by a header when hovering over `#include`
+      /// directives
+      std::optional<Located<bool>> ShowProvidedSymbols;
+
+      /// Show information about how a value is being passed to a function.
+      ///
+      /// @note
+      /// Given this function:
+      ///
+      /// > `void my_name(std::string name_value)`
+      ///
+      /// Called:
+      ///
+      /// > `my_name("Moe")`
+      ///
+      /// Hovering over `"Moe"` would produce:
+      ///
+      /// > Passing `string-literal` as `name_value` (converted to
+      /// `std::string`)
+      std::optional<Located<bool>> ShowCalleeInfo;
+    };
+    HoverBlock Hover;
+  };
+  C32Block C32;
+  // MARK: - C32 End
 };
 
 } // namespace config

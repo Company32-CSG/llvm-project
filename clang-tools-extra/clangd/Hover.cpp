@@ -1283,6 +1283,11 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
     HI.DefinitionLanguage = "";
     HI.Kind = index::SymbolKind::IncludeDirective;
     maybeAddUsedSymbols(AST, HI, Inc);
+
+    // MARK: - C32 Begin
+    HI.EnhancedInfo.Style = Style;
+    maybeAddProvidedSymbols(AST, HI, Inc, PP);
+    // MARK: - C32 End
     return HI;
   }
 
@@ -1368,14 +1373,17 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
   if (!HI)
     return std::nullopt;
 
-  // Reformat Definition
-  if (!HI->Definition.empty()) {
-    auto Replacements = format::reformat(
-        Style, HI->Definition, tooling::Range(0, HI->Definition.size()));
-    if (auto Formatted =
-            tooling::applyAllReplacements(HI->Definition, Replacements))
-      HI->Definition = *Formatted;
-  }
+  // MARK: - C32 Begin
+  //   // Reformat Definition
+  //   if (!HI->Definition.empty()) {
+  //     auto Replacements = format::reformat(
+  //         Style, HI->Definition, tooling::Range(0, HI->Definition.size()));
+  //     if (auto Formatted =
+  //             tooling::applyAllReplacements(HI->Definition, Replacements))
+  //       HI->Definition = *Formatted;
+  //   }
+  HI->EnhancedInfo.Style = Style;
+  // MARK: - C32 End
 
   HI->DefinitionLanguage = getMarkdownLanguage(AST.getASTContext());
   HI->SymRange = halfOpenToRange(SM, HighlightRange);
