@@ -16,6 +16,9 @@
 #include <optional>
 #include <string>
 #include <vector>
+// MARK: - C32 Begin
+#include "c32-doxygen/Markdown.hpp"
+// MARK: - C32 End
 
 namespace clang {
 namespace clangd {
@@ -184,6 +187,8 @@ struct HoverInfo {
 
       return ForKind;
     }
+
+    c32::markdown::Document presentC32Doxygen();
   };
   EnhancedInfo EnhancedInfo;
   // MARK: - C32 End

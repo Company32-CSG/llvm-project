@@ -65,6 +65,15 @@
 #include <string>
 #include <vector>
 
+// MARK: - C32 Begin
+#include "c32-doxygen/Utils.hpp"
+
+namespace clang::clangd::c32 {
+static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
+                                    const Inclusion &Inc, PrintingPolicy &PP);
+} // namespace clang::clangd::c32
+// MARK: - C32 End
+
 namespace clang {
 namespace clangd {
 namespace {
@@ -641,6 +650,20 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
 
   HI.Kind = index::getSymbolInfo(D).Kind;
 
+  // MARK: - C32 Begin
+  if (HI.Kind == index::SymbolKind::TypeAlias) {
+    if (const auto *TN = dyn_cast<TypedefNameDecl>(D)) {
+      QualType Desugared = TN->getUnderlyingType().getDesugaredType(Ctx);
+
+      if (const TagType *TType = Desugared->getAs<TagType>()) {
+        const TagDecl *TDecl = TType->getDecl();
+
+        HI.EnhancedInfo.UnderlyingKind = index::getSymbolInfo(TDecl).Kind;
+      }
+    }
+  }
+  // MARK: - C32 End
+
   // Fill in template params.
   if (const TemplateDecl *TD = D->getDescribedTemplate()) {
     HI.TemplateParameters =
@@ -670,17 +693,98 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
   else if (const auto *TAT = dyn_cast<TypeAliasTemplateDecl>(D))
     HI.Type = printType(TAT->getTemplatedDecl()->getUnderlyingType(), Ctx, PP);
 
+  // MARK: - C32 Begin
+
+  // // Fill in value with evaluated initializer if possible.
+  // if (const auto *Var = dyn_cast<VarDecl>(D); Var && !Var->isInvalidDecl()) {
+  //   if (const Expr *Init = Var->getInit())
+  //     HI.Value = printExprValue(Init, Ctx);
+  // } else if (const auto *ECD = dyn_cast<EnumConstantDecl>(D)) {
+  //   // Dependent enums (e.g. nested in template classes) don't have values
+  //   yet. if (!ECD->getType()->isDependentType())
+  //     HI.Value = toString(ECD->getInitVal(), 10);
+  // }
+
+  if (const auto *PVD = dyn_cast<ParmVarDecl>(D)) {
+    if (const auto *FD = dyn_cast<FunctionDecl>(PVD->getDeclContext())) {
+      const auto *CommentD = getDeclForComment(FD);
+      HI.Documentation = getDeclComment(Ctx, *CommentD);
+    }
+  }
   // Fill in value with evaluated initializer if possible.
-  if (const auto *Var = dyn_cast<VarDecl>(D); Var && !Var->isInvalidDecl()) {
+  else if (const auto *Var = dyn_cast<VarDecl>(D);
+           Var && !Var->isInvalidDecl()) {
     if (const Expr *Init = Var->getInit())
       HI.Value = printExprValue(Init, Ctx);
+  } else if (const auto *TD = dyn_cast<TypedefNameDecl>(D)) {
+    if (const auto *ET = TD->getUnderlyingType()->getAs<EnumType>()) {
+      const auto *ED = ET->getDecl();
+
+      HI.EnhancedInfo.EnumMembers.emplace();
+
+      for (auto *ECD : ED->enumerators()) {
+        HoverInfo::EnhancedInfo::EnumMember Member;
+
+        if (const auto *Init = ECD->getInitExpr()) {
+          auto &AST = ECD->getASTContext();
+          auto &SM = AST.getSourceManager();
+          auto LO = AST.getLangOpts();
+
+          // Make a CharSourceRange that covers the entire Expr token-wise:
+          auto Range = CharSourceRange::getTokenRange(Init->getSourceRange());
+
+          // Extract the exact text the user wrote:
+          Member.Expr = clang::Lexer::getSourceText(Range, SM, LO);
+        }
+
+        Member.Name = ECD->getNameAsString();
+        Member.Value = toString(ECD->getInitVal(), 10);
+        HI.EnhancedInfo.EnumMembers->emplace_back(std::move(Member));
+      }
+    }
+  } else if (const auto *ED = dyn_cast<EnumDecl>(D)) {
+    HI.EnhancedInfo.EnumMembers.emplace();
+
+    for (auto *ECD : ED->enumerators()) {
+      HoverInfo::EnhancedInfo::EnumMember Member;
+
+      if (const auto *Init = ECD->getInitExpr()) {
+        auto &AST = ECD->getASTContext();
+        auto &SM = AST.getSourceManager();
+        auto LO = AST.getLangOpts();
+
+        // Make a CharSourceRange that covers the entire Expr token-wise:
+        auto Range = CharSourceRange::getTokenRange(Init->getSourceRange());
+
+        // Extract the exact text the user wrote:
+        Member.Expr = clang::Lexer::getSourceText(Range, SM, LO);
+      }
+
+      Member.Name = ECD->getNameAsString();
+      Member.Value = toString(ECD->getInitVal(), 10);
+      HI.EnhancedInfo.EnumMembers->emplace_back(std::move(Member));
+    }
   } else if (const auto *ECD = dyn_cast<EnumConstantDecl>(D)) {
     // Dependent enums (e.g. nested in template classes) don't have values yet.
+
+    const EnumDecl *ED = dyn_cast_or_null<EnumDecl>(ECD->getDeclContext());
+
     if (!ECD->getType()->isDependentType())
       HI.Value = toString(ECD->getInitVal(), 10);
+
+    if (ED && ED->getIdentifier()) {
+      HI.EnhancedInfo.ParentEnumName = ED->getNameAsString();
+    } else {
+      HI.EnhancedInfo.ParentEnumName = "...";
+    }
   }
+  // MARK: - C32 End
 
   HI.Definition = printDefinition(D, PP, TB);
+
+  // MARK: - C32 Begin
+  HI.Definition = c32::canonicalizeWhitespace(HI.Definition);
+  // MARK: - C32 End
   return HI;
 }
 
@@ -879,7 +983,9 @@ HoverInfo getStringLiteralContents(const StringLiteral *SL,
                                    const PrintingPolicy &PP) {
   HoverInfo HI;
 
-  HI.Name = "string-literal";
+  // MARK: - C32 Begin
+  HI.Name = "\"" + SL->getString().str() + "\"";
+  // MARK: - C32 End
   HI.Size = (SL->getLength() + 1) * SL->getCharByteWidth() * 8;
   HI.Type = SL->getType().getAsString(PP).c_str();
 
@@ -931,7 +1037,16 @@ std::optional<HoverInfo> getHoverContents(const SelectionTree::Node *N,
       // FIXME Might want to show the expression's value here instead?
       // E.g. if the literal is in hex it might be useful to show the decimal
       // value here.
-      HI->Name = "literal";
+      // MARK: - C32 Begin
+      // HI->Name = "literal";
+      if (auto Val = printExprValue(E, AST.getASTContext())) {
+        /* e.g., "42", "hello", "0x2A", etc. */
+        HI->Name = *Val;
+      } else {
+        /* Fallback */
+        HI->Name = "literal";
+      }
+      // MARK: - C32 End
       return HI;
     }
     return std::nullopt;
@@ -1286,7 +1401,7 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
 
     // MARK: - C32 Begin
     HI.EnhancedInfo.Style = Style;
-    maybeAddProvidedSymbols(AST, HI, Inc, PP);
+    c32::maybeAddProvidedSymbols(AST, HI, Inc, PP);
     // MARK: - C32 End
     return HI;
   }
@@ -1743,6 +1858,11 @@ std::string HoverInfo::present(MarkupKind Kind) const {
       // If the user prefers plain text, we use the present() method to generate
       // the plain text output.
       return presentDefault().asEscapedMarkdown();
+    // MARK: - C32 Begin
+    if (Cfg.Documentation.CommentFormat ==
+        Config::CommentFormatPolice::C32Doxygen)
+      return EnhancedInfo.presentC32Doxygen().markdown();
+    // MARK: - C32 End
   }
 
   return presentDefault().asPlainText();
@@ -1837,6 +1957,55 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
     OS << " (aka " << *P.Type->AKA << ")";
   return OS;
 }
+
+// MARK: - C32 Begin
+namespace c32 {
+static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
+                                    const Inclusion &Inc, PrintingPolicy &PP) {
+  auto Converted = convertIncludes(AST);
+
+  llvm::DenseSet<include_cleaner::Symbol> UsedSymbols;
+
+  include_cleaner::walkUsed(
+      AST.getLocalTopLevelDecls(), collectMacroReferences(AST),
+      &AST.getPragmaIncludes(), AST.getPreprocessor(),
+      [&](const include_cleaner::SymbolReference &Ref,
+          llvm::ArrayRef<include_cleaner::Header> Providers) {
+        if (Ref.RT != include_cleaner::RefType::Explicit ||
+            UsedSymbols.contains(Ref.Target))
+          return;
+
+        if (isPreferredProvider(Inc, Converted, Providers))
+          UsedSymbols.insert(Ref.Target);
+      });
+
+  for (const auto &UsedSym : UsedSymbols) {
+    HoverInfo::EnhancedInfo::UsedSymbol Sym;
+
+    auto &Decl = UsedSym.declaration();
+    auto DeclSymInfo = index::getSymbolInfo(&Decl);
+
+    Sym.Kind = DeclSymInfo.Kind;
+    Sym.Name = getSymbolName(UsedSym);
+
+    if (const auto *ND = dyn_cast<NamedDecl>(&Decl)) {
+      if (const auto *TD = dyn_cast<TypedefNameDecl>(ND)) {
+        auto Underlying = TD->getUnderlyingType().getAsString(PP);
+
+        Sym.Type = HoverInfo::PrintedType(Underlying.c_str());
+      }
+    }
+
+    HI.EnhancedInfo.ProvidedSymbols.push_back(std::move(Sym));
+  }
+
+  HI.EnhancedInfo.ProvidedSymbols.erase(
+      std::unique(HI.EnhancedInfo.ProvidedSymbols.begin(),
+                  HI.EnhancedInfo.ProvidedSymbols.end()),
+      HI.EnhancedInfo.ProvidedSymbols.end());
+}
+} // namespace c32
+// MARK: - C32 End
 
 } // namespace clangd
 } // namespace clang
