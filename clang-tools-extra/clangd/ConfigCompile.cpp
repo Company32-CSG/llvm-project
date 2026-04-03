@@ -834,6 +834,13 @@ struct FragmentCompiler {
   }
   // MARK: - C32 Begin
   void compile(Fragment::C32Block &&F) { compile(std::move(F.Hover)); }
+  void compile(Fragment::C32Block::DocumentationBlock &&F) {
+    if (F.RequireCommentAttachedToSymbol)
+      Out.Apply.push_back([Value(**F.RequireCommentAttachedToSymbol)](
+                              const Params &, Config &C) {
+        C.C32.Documentation.RequireCommentAttachedToSymbol = Value;
+      });
+  }
   void compile(Fragment::C32Block::HoverBlock &&F) {
     if (F.ShowHoveringOver)
       Out.Apply.push_back(

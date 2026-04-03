@@ -227,11 +227,21 @@ struct Config {
   // MARK: - C32 Begin
   struct {
     struct {
+
+      /// If true, when completing a symbol, the documentation comment must be
+      /// attached directly to the symbol. This avoids attaching comments to a
+      /// symbol when an unrelated comment is defined above it.
+      bool RequireCommentAttachedToSymbol = false;
+
+    } Documentation;
+
+    struct {
+
       /// Show the 'Hovering Over' information in hover. This shows the
       /// symbol type that is being hovered over.
       bool ShowHoveringOver = false;
 
-      /// Show which heder file has provided the respective symbol
+      /// Show which header file has provided the respective symbol
       bool ShowProvider = true;
 
       /// Show the namespace and scope where applicable for the respective
@@ -247,19 +257,22 @@ struct Config {
 
       /// Show information about how a value is being passed to a function.
       ///
-      /// @note
-      /// Given this function:
+      /// @details
       ///
-      /// > `void my_name(std::string name_value)`
+      /// For example, consider the following code:
+      /// ```c
+      /// void my_name(std::string name_value)
+      /// ```
       ///
-      /// Called:
+      /// When invoked as `my_name("Moe")`, the hover will produce:
+      /// ```c
+      /// my_name("Moe")
+      /// ```
       ///
-      /// > `my_name("Moe")`
-      ///
-      /// Hovering over `"Moe"` would produce:
-      ///
-      /// > Passing `string-literal` as `name_value` (converted to
-      /// `std::string`)
+      /// and hovering over `"Moe"` will produce:
+      /// ```c
+      /// Passing `Moe` as `name_value` (converted to `std::string`)
+      /// ```
       bool ShowCalleeInfo = true;
     } Hover;
   } C32;

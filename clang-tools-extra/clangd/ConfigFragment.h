@@ -415,12 +415,20 @@ struct Fragment {
   // MARK: - C32 Begin
   /// C32 extensions
   struct C32Block {
+    struct DocumentationBlock {
+      /// If true, when completing a symbol, the documentation comment must be
+      /// attached directly to the symbol. This avoids attaching comments to a
+      /// symbol when an unrelated comment is defined above it.
+      std::optional<Located<bool>> RequireCommentAttachedToSymbol;
+    };
+    DocumentationBlock Documentation;
+
     struct HoverBlock {
       /// Show the 'Hovering Over' information in hover. This shows the
       /// symbol type that is being hovered over.
       std::optional<Located<bool>> ShowHoveringOver;
 
-      /// Show which heder file has provided the respective symbol
+      /// Show which header file has provided the respective symbol
       std::optional<Located<bool>> ShowProvider;
 
       /// Show the namespace and scope where applicable for the respective
@@ -436,19 +444,22 @@ struct Fragment {
 
       /// Show information about how a value is being passed to a function.
       ///
-      /// @note
-      /// Given this function:
+      /// @details
       ///
-      /// > `void my_name(std::string name_value)`
+      /// For example, consider the following code:
+      /// ```c
+      /// void my_name(std::string name_value)
+      /// ```
       ///
-      /// Called:
+      /// When invoked as `my_name("Moe")`, the hover will produce:
+      /// ```c
+      /// my_name("Moe")
+      /// ```
       ///
-      /// > `my_name("Moe")`
-      ///
-      /// Hovering over `"Moe"` would produce:
-      ///
-      /// > Passing `string-literal` as `name_value` (converted to
-      /// `std::string`)
+      /// and hovering over `"Moe"` will produce:
+      /// ```c
+      /// Passing `Moe` as `name_value` (converted to `std::string`)
+      /// ```
       std::optional<Located<bool>> ShowCalleeInfo;
     };
     HoverBlock Hover;

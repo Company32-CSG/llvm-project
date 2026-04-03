@@ -336,12 +336,30 @@ private:
   void parse(Fragment::C32Block &F, Node &N) {
     DictParser Dict("C32", this);
 
+    Dict.handle("Documentation", [&](Node &N) {
+      Fragment::C32Block::DocumentationBlock Documentation;
+
+      parse(Documentation, N);
+
+      F.Documentation = std::move(Documentation);
+    });
+
     Dict.handle("Hover", [&](Node &N) {
       Fragment::C32Block::HoverBlock Hover;
 
       parse(Hover, N);
 
       F.Hover = std::move(Hover);
+    });
+
+    Dict.parse(N);
+  }
+  void parse(Fragment::C32Block::DocumentationBlock &F, Node &N) {
+    DictParser Dict("Documentation", this);
+
+    Dict.handle("RequireCommentAttachedToSymbol", [&](Node &N) {
+      F.RequireCommentAttachedToSymbol =
+          boolValue(N, "RequireCommentAttachedToSymbol");
     });
 
     Dict.parse(N);
