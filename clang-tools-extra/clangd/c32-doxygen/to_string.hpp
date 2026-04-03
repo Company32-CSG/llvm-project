@@ -8,11 +8,11 @@
 
 // NOLINTBEGIN
 
-namespace std {
+namespace clang::clangd::c32::doxygen {
 
 // MARK: - SymbolKind
 
-std::string to_string(clang::index::SymbolKind Value) {
+inline std::string to_string(clang::index::SymbolKind Value) {
   switch (Value) {
   case clang::index::SymbolKind::Module:
     return "Module";
@@ -104,6 +104,9 @@ std::string to_string(clang::index::SymbolKind Value) {
   case clang::index::SymbolKind::Concept:
     return "Concept";
 
+  case clang::index::SymbolKind::IncludeDirective:
+    return "Include";
+
   default:
     return "Unknown";
   }
@@ -111,11 +114,8 @@ std::string to_string(clang::index::SymbolKind Value) {
 
 // MARK: - ParameterTag::Specifier
 
-std::string
-to_string(clang::clangd::c32::doxygen::ParameterTag::Specifier Value,
-          bool AsSymbol = true) {
-  using namespace clang::clangd::c32::doxygen;
-
+inline std::string to_string(c32::doxygen::ParameterTag::Specifier Value,
+                             bool AsSymbol = true) {
   bool In =
       (ParameterTag::Specifier::None != (Value & ParameterTag::Specifier::In));
   bool Out =
@@ -144,9 +144,7 @@ to_string(clang::clangd::c32::doxygen::ParameterTag::Specifier Value,
 
 // MARK: - TagType
 
-std::string to_string(clang::clangd::c32::doxygen::TagType Value) {
-  using namespace clang::clangd::c32::doxygen;
-
+inline std::string to_string(c32::doxygen::TagType Value) {
   switch (Value) {
   case TagType::Brief:
     return "Brief";
@@ -192,7 +190,7 @@ std::string to_string(clang::clangd::c32::doxygen::TagType Value) {
   }
 }
 
-} // namespace std
+} // namespace clang::clangd::c32::doxygen
 
 // NOLINTEND
 
