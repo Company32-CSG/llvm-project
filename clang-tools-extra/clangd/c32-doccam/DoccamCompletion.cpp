@@ -1,7 +1,6 @@
-#include "c32-doxygen/DoxygenCompletion.hpp"
-#include "c32-doxygen/Doxygen.hpp"
-#include "c32-doxygen/Markdown.hpp"
-#include "c32-doxygen/Utils.hpp"
+#include "c32-doccam/DoccamCompletion.hpp"
+#include "c32-doccam/Doccam.hpp"
+#include "c32-doccam/Utils.hpp"
 
 #include "CodeComplete.h"
 #include "Protocol.h"
@@ -20,7 +19,7 @@
 #include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::doccam {
 
 namespace {
 
@@ -52,7 +51,7 @@ struct CompletionContext {
   std::string Prefix;
 
   /// Matched tag if parsed
-  std::optional<MatchedTag> MatchedTag;
+  std::optional<MatchedTag> Matched;
 
   /// Begin position for LSP to insert our suggestion
   size_t ReplaceBegin;
@@ -141,17 +140,7 @@ std::vector<std::string> splitAttrs(std::string_view SV) {
   return R;
 }
 
-markdown::Document buildItemDoc(const DoxygenTag &T) {
-  markdown::Document Output;
-
-  Output.heading(3U).text("💡");
-
-  Output.paragraph().text(std::string(T.Description));
-
-  return Output;
-}
-
-std::vector<CodeCompletion> buildTagItems(const DoxygenTag &T, char INI,
+std::vector<CodeCompletion> buildTagItems(const DoccamTag &T, char INI,
                                           const Range &CompletionRange) {
   std::vector<CodeCompletion> R;
 
@@ -162,7 +151,7 @@ std::vector<CodeCompletion> buildTagItems(const DoxygenTag &T, char INI,
   Item.Name = INI + std::string(T.Name);
   Item.FilterText = Item.Name;
   Item.Kind = CompletionItemKind::Property;
-  Item.Documentation = buildItemDoc(T);
+  Item.RawDocumentation = "💡 " + std::string(T.Description);
   Item.CompletionTokenRange = CompletionRange;
 
   CodeCompletion AliasItem = Item;
@@ -379,7 +368,7 @@ static std::optional<CompletionContext> buildContext(std::string_view Contents,
   if (auto Tag = getTag(Contents.substr(TagPos), 0U, TagContext::Any)) {
     size_t After = TagPos + Tag->Consumed;
 
-    Context.MatchedTag = *Tag;
+    Context.Matched = *Tag;
 
     /* Handle the reference initiator shortcut ('%') since there is no delimiter
      * (no space after '%') */
@@ -705,7 +694,7 @@ CodeCompleteResult completeReferences(const CompletionContext &Context,
                                       const CodeCompleteArgs &Args) {
   CodeCompleteResult R;
 
-  if (!Context.MatchedTag && '%' != Context.TriggerCharacter)
+  if (!Context.Matched && '%' != Context.TriggerCharacter)
     return R;
 
   auto PatchedContents = std::string(Args.Contents);
@@ -800,7 +789,7 @@ CodeCompleteResult completeMemberReferences(const CompletionContext &Context,
 
 } // namespace
 
-bool inDoxygenComment(std::string_view Contents, size_t CursorOffset) {
+bool inDoccamComment(std::string_view Contents, size_t CursorOffset) {
   size_t StarBlockStart = Contents.rfind("/**", CursorOffset);
   size_t ExclBlockStart = Contents.rfind("/*!", CursorOffset);
   size_t BlockStart = std::string::npos;
@@ -816,11 +805,11 @@ bool inDoxygenComment(std::string_view Contents, size_t CursorOffset) {
   else if (std::string::npos != ExclBlockStart)
     BlockStart = ExclBlockStart;
 
-  /* Found the start of a '/** or '/*!' Doxygen comment */
+  /* Found the start of a '/** or '/*!' Doccam comment */
   if (std::string::npos != BlockStart) {
     size_t BlockEnd = Contents.find("*/", BlockStart);
 
-    /* We are definitely in a Doxygen comment */
+    /* We are definitely in a Doccam comment */
     if (std::string::npos == BlockEnd || CursorOffset < BlockEnd)
       return true;
   }
@@ -832,7 +821,7 @@ bool inDoxygenComment(std::string_view Contents, size_t CursorOffset) {
   if (StartsWithThreeSlash || StartsWithExclSlash)
     return true;
 
-  /* Not in a Doxygen comment */
+  /* Not in a Doccam comment */
   return false;
 }
 
@@ -854,7 +843,7 @@ bool shouldRunCompletion(std::string_view Contents, size_t CursorOffset,
   switch (Context->Kind) {
   case ContextKind::Tag: {
     return Manual ||
-           (!TriggerCharacter.empty() && isDoxygenTagInitiator(Trigger));
+           (!TriggerCharacter.empty() && isDoccamTagInitiator(Trigger));
   }
 
   case ContextKind::ParamAttr: {
@@ -914,8 +903,41 @@ bool shouldRunCompletion(std::string_view Contents, size_t CursorOffset,
   }
 }
 
-CodeCompleteResult completion(const CodeCompleteArgs &Args) {
+std::optional<CodeCompleteResult> maybeCompleteDoccamComment(
+    PathRef FileName, const PreambleData *Preamble,
+    const ParseInputs &ParseInput, CodeCompleteOptions Opts,
+    SpeculativeFuzzyFind *SpecFuzzyFind, StringRef Content, size_t Offset) {
+  const ParsedAST *ASTPtr = nullptr;
+  std::optional<ParsedAST> BuiltAST;
+  std::shared_ptr<const PreambleData> PreambleSP;
+
+  if (!inDoccamComment(Content, Offset))
+    return std::nullopt;
+
+  if (nullptr != Preamble &&
+      CodeCompleteOptions::NeverParse != Opts.RunParser) {
+    PreambleSP = std::shared_ptr<const PreambleData>(
+        Preamble, [](const PreambleData *) {});
+    clang::IgnoringDiagConsumer DC;
+    std::unique_ptr<CompilerInvocation> CI =
+        buildCompilerInvocation(ParseInput, DC, nullptr);
+
+    if (CI) {
+      std::vector<Diag> EmptyDiags;
+
+      BuiltAST = ParsedAST::build(FileName, ParseInput, std::move(CI),
+                                  EmptyDiags, PreambleSP);
+
+      if (BuiltAST)
+        ASTPtr = &*BuiltAST;
+    }
+  }
+
   CodeCompleteResult Empty;
+  CodeCompleteArgs Args{
+      FileName,      ParseInput, Preamble, Opts,
+      SpecFuzzyFind, Content,    Offset,   ASTPtr,
+  };
 
   auto Context = buildContext(Args.Contents, Args.Offset);
 
@@ -947,4 +969,4 @@ CodeCompleteResult completion(const CodeCompleteArgs &Args) {
   }
 }
 
-} // namespace clang::clangd::c32::doxygen
+} // namespace clang::clangd::c32::doccam

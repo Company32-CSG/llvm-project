@@ -1,14 +1,14 @@
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_TO_STRING_HPP
-#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_TO_STRING_HPP
-#include "c32-doxygen/Doxygen.hpp"
-#include "c32-doxygen/DoxygenParser.hpp"
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_TO_STRING_HPP
+#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_TO_STRING_HPP
+#include "c32-doccam/Doccam.hpp"
+#include "c32-doccam/DoccamParser.hpp"
 #include "clang/Index/IndexSymbol.h"
 
 #include <string>
 
 // NOLINTBEGIN
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::doccam {
 
 // MARK: - SymbolKind
 
@@ -114,7 +114,7 @@ inline std::string to_string(clang::index::SymbolKind Value) {
 
 // MARK: - ParameterTag::Specifier
 
-inline std::string to_string(c32::doxygen::ParameterTag::Specifier Value,
+inline std::string to_string(c32::doccam::ParameterTag::Specifier Value,
                              bool AsSymbol = true) {
   bool In =
       (ParameterTag::Specifier::None != (Value & ParameterTag::Specifier::In));
@@ -144,7 +144,7 @@ inline std::string to_string(c32::doxygen::ParameterTag::Specifier Value,
 
 // MARK: - TagType
 
-inline std::string to_string(c32::doxygen::TagType Value) {
+inline std::string to_string(c32::doccam::TagType Value) {
   switch (Value) {
   case TagType::Brief:
     return "Brief";
@@ -190,7 +190,7 @@ inline std::string to_string(c32::doxygen::TagType Value) {
   }
 }
 
-} // namespace clang::clangd::c32::doxygen
+} // namespace clang::clangd::c32::doccam
 
 // NOLINTEND
 

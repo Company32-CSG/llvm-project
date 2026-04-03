@@ -142,7 +142,34 @@ std::string getDeclComment(const ASTContext &Ctx, const NamedDecl &Decl) {
           cast<TemplateTypeParmDecl>(&Decl)->getName(), OS);
 
     Doc = StringRef(RawDoc).trim().str();
-  } else {
+  }
+  // MARK: - C32 Begin
+  else if (Cfg.Documentation.CommentFormat ==
+           Config::CommentFormatPolicy::Doccam) {
+
+    RC = getCompletionComment(Ctx, &Decl);
+    if (!RC)
+      return "";
+
+    // Sanity check that the comment does not come from the PCH. We choose to
+    // not write them into PCH, because they are racy and slow to load.
+    assert(!Ctx.getSourceManager().isLoadedSourceLocation(RC->getBeginLoc()));
+
+    Doc = RC->getFormattedText(Ctx.getSourceManager(), Ctx.getDiagnostics());
+
+    std::string DebugText = "";
+
+    if (Cfg.C32.Doccam.RequireCommentAttachedToSymbol && !RC->isAttached())
+      DebugText += "\n - NOT-ATTACHED";
+
+    if (!RC->isDocumentation())
+      DebugText += "\n - NOT-DOCUMENTATION";
+
+    if (!DebugText.empty())
+      Doc += "\n## DEBUG" + DebugText;
+  }
+  // MARK: - C32 End
+  else {
     RC = getCompletionComment(Ctx, &Decl);
     if (!RC)
       return "";

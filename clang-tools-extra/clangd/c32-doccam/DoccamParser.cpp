@@ -1,7 +1,8 @@
-#include "DoxygenParser.hpp"
-#include "Doxygen.hpp"
-#include "Utils.hpp"
-#include "support/Logger.h"
+#include "c32-doccam/DoccamParser.hpp"
+#include "c32-doccam/Doccam.hpp"
+#include "c32-doccam/Markdown.hpp"
+#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/to_string.hpp"
 
 #include "clang/Format/Format.h"
 #include "clang/Tooling/Core/Replacement.h"
@@ -14,14 +15,14 @@
 #include <string>
 #include <string_view>
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::doccam {
 
 /* ------------------------------------------------------------ */
 
 namespace {
 
 struct ParsedTag {
-  /// Concrete Doxygen tag type (aliases are resolved to concrete types)
+  /// Concrete Doccam tag type (aliases are resolved to concrete types)
   TagType Type;
 
   /// String following the tag initiator (e.g., `@` or `\`)
@@ -38,6 +39,7 @@ struct ParsedTag {
 namespace predicate {
 
 struct Flags {
+  // NOLINTBEGIN(readability-identifier-naming)
   bool TAG : 1U;
   bool TAG_TERMINATOR : 1U;
   bool SPACE : 1U;
@@ -51,6 +53,7 @@ struct Flags {
   Flags(bool TAG, bool TAG_TERMINATOR, bool SPACE, bool BREAK, bool END)
       : TAG(TAG), TAG_TERMINATOR(TAG_TERMINATOR), SPACE(SPACE), BREAK(BREAK),
         END(END) {}
+  // NOLINTEND(readability-identifier-naming)
 };
 
 const Flags Tag(true, false, false, false, true);
@@ -67,7 +70,7 @@ std::optional<size_t> execute(std::string_view SV, Flags &Flags) {
       if (isEscaping(SV, I))
         continue;
 
-      if (!isDoxygenTagInitiator(SV[I]))
+      if (!isDoccamTagInitiator(SV[I]))
         continue;
 
       if (auto T = getTag(SV, I, TagContext::Block)) {
@@ -84,7 +87,7 @@ std::optional<size_t> execute(std::string_view SV, Flags &Flags) {
       if (isEscaping(SV, I))
         continue;
 
-      if (!isDoxygenTagInitiator(SV[I]))
+      if (!isDoccamTagInitiator(SV[I]))
         continue;
 
       if (auto T = getTag(SV, I, TagContext::Block)) {
@@ -216,7 +219,7 @@ std::optional<std::string> consumeUntil(ConsumeContext &Context,
   FinalResult.reserve(Piece.size());
 
   for (size_t I = 0U; I < Piece.size(); I++) {
-    if (!isEscaping(Piece, I) && isDoxygenTagInitiator(Piece[I])) {
+    if (!isEscaping(Piece, I) && isDoccamTagInitiator(Piece[I])) {
       if (auto T = getTag(Piece, I, TagContext::Inline)) {
         /* Start just after the tag spelling (initiator + whitespace + name) */
         size_t Cursor = I + T->Consumed;
@@ -297,7 +300,7 @@ std::optional<std::string> consumeUntilTerminatingTag(ConsumeContext &Context) {
     if (isEscaping(Context.Working, I))
       continue;
 
-    if (!isDoxygenTagInitiator(Context.Working[I]))
+    if (!isDoccamTagInitiator(Context.Working[I]))
       continue;
 
     if (auto T = getTag(Context.Working, I, TagContext::Block)) {
@@ -430,18 +433,18 @@ std::optional<ParsedTag> consumeTag(ConsumeContext &Content) {
 
 } // namespace
 
-ParsedDoxygen parse(std::string_view Contents,
-                    const format::FormatStyle &Style) {
+ParsedDoccam parse(std::string_view Contents,
+                   const format::FormatStyle &Style) {
   ConsumeContext Context(Contents);
-  ParsedDoxygen Doxygen;
+  ParsedDoccam Doccam;
 
   while (auto Consumed = consumeUntil(Context, predicate::TagOrEnd)) {
     if (!Consumed->empty()) {
       auto Printed = unescape(*Consumed);
       auto Lines = split(Printed, "\n");
 
-      Doxygen.UntaggedLines.insert(Doxygen.UntaggedLines.end(), Lines.begin(),
-                                   Lines.end());
+      Doccam.UntaggedLines.insert(Doccam.UntaggedLines.end(), Lines.begin(),
+                                  Lines.end());
     }
 
     if (auto Tag = consumeTag(Context)) {
@@ -453,7 +456,7 @@ ParsedDoxygen parse(std::string_view Contents,
         if (Canon.empty())
           break;
 
-        Doxygen.Brief = Canon;
+        Doccam.Brief = Canon;
         break;
       }
 
@@ -480,7 +483,7 @@ ParsedDoxygen parse(std::string_view Contents,
         else
           T.Code = PrintedCode;
 
-        Doxygen.CodeExamples.push_back(std::move(T));
+        Doccam.CodeExamples.push_back(std::move(T));
         break;
       }
 
@@ -491,7 +494,7 @@ ParsedDoxygen parse(std::string_view Contents,
         if (Canon.empty())
           break;
 
-        Doxygen.Deprecated = Canon;
+        Doccam.Deprecated = Canon;
         break;
       }
 
@@ -530,7 +533,7 @@ ParsedDoxygen parse(std::string_view Contents,
           }
         }
 
-        Doxygen.Parameters.push_back(std::move(T));
+        Doccam.Parameters.push_back(std::move(T));
         break;
       }
 
@@ -541,7 +544,7 @@ ParsedDoxygen parse(std::string_view Contents,
         if (Canon.empty())
           break;
 
-        Doxygen.Returns = Canon;
+        Doccam.Returns = Canon;
         break;
       }
 
@@ -555,7 +558,7 @@ ParsedDoxygen parse(std::string_view Contents,
 
         auto Description = consumeUntil(TagContext, predicate::TagOrEnd);
 
-        Doxygen.Retvals[unescape(*Value)] =
+        Doccam.Retvals[unescape(*Value)] =
             Description ? canonicalizeWhitespace(unescape(*Description), true)
                         : "";
         break;
@@ -571,7 +574,7 @@ ParsedDoxygen parse(std::string_view Contents,
 
         auto Description = consumeUntil(TagContext, predicate::TagOrEnd);
 
-        Doxygen.Throws[unescape(*Value)] =
+        Doccam.Throws[unescape(*Value)] =
             Description ? canonicalizeWhitespace(unescape(*Description), true)
                         : "";
         break;
@@ -587,7 +590,7 @@ ParsedDoxygen parse(std::string_view Contents,
 
         auto Description = consumeUntil(TagContext, predicate::TagOrEnd);
 
-        Doxygen.TParams[unescape(*Value)] =
+        Doccam.TParams[unescape(*Value)] =
             Description ? canonicalizeWhitespace(unescape(*Description), true)
                         : "";
         break;
@@ -603,8 +606,8 @@ ParsedDoxygen parse(std::string_view Contents,
 
         auto Description = consumeUntil(TagContext, predicate::TagOrEnd);
 
-        Doxygen.Version.first = unescape(*Value);
-        Doxygen.Version.second =
+        Doccam.Version.first = unescape(*Value);
+        Doccam.Version.second =
             Description ? canonicalizeWhitespace(unescape(*Description), true)
                         : "";
 
@@ -618,7 +621,7 @@ ParsedDoxygen parse(std::string_view Contents,
         if (Canon.empty())
           break;
 
-        Doxygen.Warnings.push_back(Canon);
+        Doccam.Warnings.push_back(Canon);
         break;
       }
 
@@ -629,14 +632,94 @@ ParsedDoxygen parse(std::string_view Contents,
         T.Name = Tag->Name;
         T.Body = canonicalizeWhitespace(unescape(Tag->Body), true);
 
-        Doxygen.CustomTags.push_back(std::move(T));
+        Doccam.CustomTags.push_back(std::move(T));
         break;
       }
       }
     }
   }
 
-  return Doxygen;
+  return Doccam;
 }
 
-} // namespace clang::clangd::c32::doxygen
+void renderDocumentation(std::string_view Raw, c32::markdown::Document &Out) {
+  if (Raw.empty())
+    return;
+
+  auto Parsed = parse(Raw, format::getLLVMStyle());
+
+  if (!Parsed.Brief.empty())
+    Out.paragraph().text(Parsed.Brief);
+
+  for (const auto &Line : Parsed.UntaggedLines)
+    Out.paragraph().text(Line);
+
+  if (!Parsed.Deprecated.empty())
+    Out.paragraph().text("Deprecated: ").italic().text(Parsed.Deprecated);
+
+  if (!Parsed.Parameters.empty()) {
+    Out.heading(3U).text("Parameters");
+    for (const auto &P : Parsed.Parameters) {
+      auto &Para = Out.paragraph();
+      if (ParameterTag::Specifier::None != P.Specifiers)
+        Para.code(c32::doccam::to_string(P.Specifiers)).space();
+      Para.code(P.Name).space().text("→").space().text(P.Description);
+    }
+  }
+
+  if (!Parsed.TParams.empty()) {
+    Out.heading(3U).text("Template Params");
+    auto &List = Out.list();
+    for (const auto &[Key, Val] : Parsed.TParams) {
+      auto &Item = List.item();
+      Item.code(Key).bold();
+      if (!Val.empty())
+        Item.space().text("→").space().text(Val);
+    }
+  }
+
+  if (!Parsed.Returns.empty()) {
+    Out.heading(3U).text("Returns");
+    Out.paragraph().text(Parsed.Returns);
+  }
+
+  if (!Parsed.Retvals.empty()) {
+    if (Parsed.Returns.empty())
+      Out.heading(3U).text("Returns");
+    auto &List = Out.list();
+    for (const auto &[Key, Val] : Parsed.Retvals) {
+      auto &Item = List.item();
+      Item.code(Key).bold();
+      if (!Val.empty())
+        Item.space().text("→").space().text(Val);
+    }
+  }
+
+  if (!Parsed.Throws.empty()) {
+    Out.heading(3U).text("Throws");
+    auto &List = Out.list();
+    for (const auto &[Key, Val] : Parsed.Throws) {
+      auto &Item = List.item();
+      Item.code(Key).bold();
+      if (!Val.empty())
+        Item.space().text("→").space().text(Val);
+    }
+  }
+
+  if (!Parsed.Warnings.empty()) {
+    Out.heading(3U).text("⚠️ Warning");
+    auto &List = Out.list().compact();
+    for (const auto &W : Parsed.Warnings)
+      List.item().text(W).italic();
+  }
+
+  for (const auto &CT : Parsed.CustomTags) {
+    Out.heading(3U).text(CT.Name);
+    Out.paragraph().text(CT.Body);
+  }
+
+  for (const auto &Ex : Parsed.CodeExamples)
+    Out.codeBlock(Ex.Lang, c32::indentLines(Ex.Code));
+}
+
+} // namespace clang::clangd::c32::doccam

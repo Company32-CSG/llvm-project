@@ -216,65 +216,59 @@ struct Config {
     /// Treat comments as doxygen.
     Doxygen,
     // MARK: - C32 Begin
-    /// Company32 Doxygen flavor.
-    C32Doxygen,
+    /// Treat comments as doccam.
+    Doccam,
     // MARK: - C32 End
   };
 
   struct {
     CommentFormatPolicy CommentFormat = CommentFormatPolicy::PlainText;
   } Documentation;
+
   // MARK: - C32 Begin
   struct {
     struct {
+      struct {
+        /// Show which header file has provided the respective symbol
+        bool ShowProvider = true;
+
+        /// Show the namespace and scope where applicable for the respective
+        /// symbol
+        bool ShowScope = false;
+
+        /// Show details about field/struct/class size, offset, and alignment
+        bool ShowSizeAndOffset = false;
+
+        /// Show what files are provided by a header when hovering over
+        /// `#include` directives
+        bool ShowProvidedSymbols = true;
+
+        /// Show information about how a value is being passed to a function.
+        ///
+        /// @details
+        ///
+        /// For example, consider the following code:
+        /// ```c
+        /// void my_name(std::string name_value)
+        /// ```
+        ///
+        /// When invoked as `my_name("Moe")`, the hover will produce:
+        /// ```c
+        /// my_name("Moe")
+        /// ```
+        ///
+        /// and hovering over `"Moe"` will produce:
+        /// ```c
+        /// Passing `Moe` as `name_value` (converted to `std::string`)
+        /// ```
+        bool ShowCalleeInfo = true;
+      } Hover;
 
       /// If true, when completing a symbol, the documentation comment must be
       /// attached directly to the symbol. This avoids attaching comments to a
       /// symbol when an unrelated comment is defined above it.
       bool RequireCommentAttachedToSymbol = false;
-
-    } Documentation;
-
-    struct {
-
-      /// Show the 'Hovering Over' information in hover. This shows the
-      /// symbol type that is being hovered over.
-      bool ShowHoveringOver = false;
-
-      /// Show which header file has provided the respective symbol
-      bool ShowProvider = true;
-
-      /// Show the namespace and scope where applicable for the respective
-      /// symbol
-      bool ShowScope = false;
-
-      /// Show details about field/struct/class size, offset, and alignment
-      bool ShowSizeAndOffset = false;
-
-      /// Show what files are provided by a header when hovering over `#include`
-      /// directives
-      bool ShowProvidedSymbols = true;
-
-      /// Show information about how a value is being passed to a function.
-      ///
-      /// @details
-      ///
-      /// For example, consider the following code:
-      /// ```c
-      /// void my_name(std::string name_value)
-      /// ```
-      ///
-      /// When invoked as `my_name("Moe")`, the hover will produce:
-      /// ```c
-      /// my_name("Moe")
-      /// ```
-      ///
-      /// and hovering over `"Moe"` will produce:
-      /// ```c
-      /// Passing `Moe` as `name_value` (converted to `std::string`)
-      /// ```
-      bool ShowCalleeInfo = true;
-    } Hover;
+    } Doccam;
   } C32;
   // MARK: - C32 End
 };

@@ -1,10 +1,15 @@
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_PARSER_HPP
-#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_PARSER_HPP
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_PARSER_HPP
+#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_PARSER_HPP
 #include "clang/Format/Format.h"
 
+#include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::markdown {
+class Document;
+} // namespace clang::clangd::c32::markdown
+
+namespace clang::clangd::c32::doccam {
 
 struct ParameterTag {
   enum class Specifier : uint8_t {
@@ -59,7 +64,7 @@ struct CustomTag {
   std::string Body;
 };
 
-struct ParsedDoxygen {
+struct ParsedDoccam {
   /// Parsed from `^@brief`
   std::string Brief;
 
@@ -97,19 +102,18 @@ struct ParsedDoxygen {
 
 /**
  * @brief
- * 		Parse Doxygen comments from \p Contents.
+ * 		Parse Doccam comments from \p Contents.
  *
  * @param[in] Contents
- * 		Contents to parse Doxygen comments from.
+ * 		Contents to parse Doccam comments from.
  *
  * @param[in] Style
  * 		Format style to use when parsing (for indentation, etc.)
  *
  * @returns
- * 		%ParsedDoxygen struct with parsed Doxygen comments.
+ * 		%ParsedDoccam struct with parsed Doccam comments.
  */
-ParsedDoxygen parse(std::string_view Contents,
-                    const format::FormatStyle &Style);
+ParsedDoccam parse(std::string_view Contents, const format::FormatStyle &Style);
 
 // MARK: - Specifier Operators
 
@@ -173,6 +177,10 @@ inline ParameterTag::Specifier operator&(ParameterTag::Specifier LHS,
                                               static_cast<uint8_t>(RHS));
 }
 
-} // namespace clang::clangd::c32::doxygen
+/// Render a raw documentation string through the c32 doccam parser into a
+/// c32::markdown::Document suitable for code completion and signature help.
+void renderDocumentation(std::string_view Raw, c32::markdown::Document &Out);
+
+} // namespace clang::clangd::c32::doccam
 
 #endif

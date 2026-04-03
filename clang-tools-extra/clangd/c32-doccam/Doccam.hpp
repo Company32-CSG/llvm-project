@@ -1,12 +1,12 @@
-#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_HPP
-#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOXYGEN_HPP
+#ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_HPP
+#define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_HPP
 #include "llvm/ADT/ArrayRef.h"
 
 #include <cstddef>
 #include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::doccam {
 
 enum class TagType {
   /// Concrete type for `^@a`
@@ -63,7 +63,7 @@ enum class TagType {
   /// Concrete type for `^@warning`, `^@warn`
   Warning,
 
-  /// Generic doxygen tag with no special handling
+  /// Generic doccam tag with no special handling
   Custom
 };
 
@@ -96,7 +96,7 @@ struct TagParsingFlags {
         HasTerminatingTag(HasTerminatingTag) {}
 };
 
-struct DoxygenTag {
+struct DoccamTag {
   /// Concrete \r TagType identifier for this tag
   TagType Type;
 
@@ -118,50 +118,50 @@ struct DoxygenTag {
 
 /**
  * @brief
- * 		Get all supported Doxygen tags.
+ * 		Get all supported Doccam tags.
  *
  * @returns
- * 		Constant array of all supported \r DoxygenTag structs.
+ * 		Constant array of all supported \r DoccamTag structs.
  */
-const llvm::ArrayRef<DoxygenTag> getAllTags();
+const llvm::ArrayRef<DoccamTag> getAllTags();
 
 /**
  * @brief
- * 		Return a list of all supported Doxygen tag names including
+ * 		Return a list of all supported Doccam tag names including
  * aliases.
  *
  * @returns
- * 		Constant array of all supported Doxygen tag names and their
+ * 		Constant array of all supported Doccam tag names and their
  * aliases.
  */
 const std::vector<std::string_view> getAllTagNames();
 
 /**
  * @brief
- * 		Get all supported Doxygen tag initiators
+ * 		Get all supported Doccam tag initiators
  *
  * @returns
- * 		Constant array of all supported Doxygen tag initiators (e.g.,
+ * 		Constant array of all supported Doccam tag initiators (e.g.,
  * `[` `^@` `]`)
  */
 const llvm::ArrayRef<char> getAllTagInitiators();
 
 /**
  * @brief
- * 		Get a Doxygen tag by its concrete \r TagType.
+ * 		Get a Doccam tag by its concrete \r TagType.
  *
  * @param[in] Type
  * 		Concrete \r TagType to search for.
  *
  * @returns
- * 		Pointer to the \r DoxygenTag that matches \p Type, or nullptr
+ * 		Pointer to the \r DoccamTag that matches \p Type, or nullptr
  */
-const DoxygenTag *getTagByType(TagType Type);
+const DoccamTag *getTagByType(TagType Type);
 
 /**
  * @brief
  * 		Check if \p contents starting at \p cursorOffset is inside of a
- * Doxygen comment.
+ * Doccam comment.
  *
  * @param[in] contents
  * 		The contents being parsed.
@@ -170,70 +170,70 @@ const DoxygenTag *getTagByType(TagType Type);
  * 		The user's current cursor offset inside of \p contents.
  *
  * @retval true
- * 		The \p cursorOffset inside of \p contents is a Doxygen comment.
+ * 		The \p cursorOffset inside of \p contents is a Doccam comment.
  *
  * @retval false
- * 		The \p cursorOffset inside of \p contents is not a Doxygen
+ * 		The \p cursorOffset inside of \p contents is not a Doccam
  * comment.
  */
-bool inDoxygenComment(std::string_view Contents, size_t CursorOffset);
+bool inDoccamComment(std::string_view Contents, size_t CursorOffset);
 
 /**
  * @brief
  * 		Check if the first character in \p contents is a supported
- * Doxygen tag initiator.
+ * Doccam tag initiator.
  *
  * @param[in] contents
  * 		String to check.
  *
  * @retval true
- * 		The first character of \p contents is a Doxygen tag initiator
+ * 		The first character of \p contents is a Doccam tag initiator
  * (e.g., `@`)
  *
  * @retval false
  * 		The first character of \p contents did not match any supported
- * Doxygen tag initiators.
+ * Doccam tag initiators.
  */
-bool isDoxygenTagInitiator(std::string_view Contents);
+bool isDoccamTagInitiator(std::string_view Contents);
 
 /**
  * @brief
- * 		Check if the character \p C is a supported Doxygen tag
+ * 		Check if the character \p C is a supported Doccam tag
  * initiator.
  *
  * @param[in] C
  * 		Character to check.
  *
  * @retval true
- * 		The character \p C is a Doxygen tag initiator (e.g., `@`)
+ * 		The character \p C is a Doccam tag initiator (e.g., `@`)
  *
  * @retval false
- * 		The character \p C did not match any supported Doxygen tag
+ * 		The character \p C did not match any supported Doccam tag
  * initiators.
  */
-bool isDoxygenTagInitiator(char C);
+bool isDoccamTagInitiator(char C);
 
 /**
  * @brief
- * 		Get a Doxygen tag by its name or alias.
+ * 		Get a Doccam tag by its name or alias.
  *
  * @param[in] Name
- * 		Name or alias of the Doxygen tag to search for.
+ * 		Name or alias of the Doccam tag to search for.
  *
  * @returns
- * 		Pointer to the \r DoxygenTag that matches \p Name, or nullptr
+ * 		Pointer to the \r DoccamTag that matches \p Name, or nullptr
  */
-const DoxygenTag *getDoxygenTagByName(std::string_view Name);
+const DoccamTag *getDoccamTagByName(std::string_view Name);
 
 /**
  * @brief
- * 		Find the closest Doxygen tag initiator in \p Contents.
+ * 		Find the closest Doccam tag initiator in \p Contents.
  *
  * @param[in] Contents
- * 		Contents to search for the closest Doxygen tag initiator.
+ * 		Contents to search for the closest Doccam tag initiator.
  *
  * @returns
- * 		Pair containing the offset of the closest Doxygen tag initiator
+ * 		Pair containing the offset of the closest Doccam tag initiator
  * and the initiator character.
  */
 std::pair<size_t, char> findClosestTagInitiator(std::string_view Contents);
@@ -278,19 +278,19 @@ bool isEscaping(std::string_view Contents, size_t Offset);
  * 		Check if the character \p C is an escape character.
  *
  * @param[in] C
- * 		Character to compare against the Doxygen escape character.
+ * 		Character to compare against the Doccam escape character.
  *
  * @retval true
- * 		The character \p C is a Doxygen escape character.
+ * 		The character \p C is a Doccam escape character.
  *
  * @retval false
- * 		The character \p C is not a Doxygen escape character.
+ * 		The character \p C is not a Doccam escape character.
  */
-bool isDoxygenEscape(const char C);
+bool isDoccamEscape(const char C);
 
 /**
  * @brief
- * 		Unescape a string by removing Doxygen escape characters.
+ * 		Unescape a string by removing Doccam escape characters.
  *
  * @param[in] SV
  * 		String view to unescape.
@@ -302,7 +302,7 @@ std::string unescape(std::string_view SV);
 
 /**
  * @brief
- * 		Check if a Doxygen tag at \p Pos in \p SV starts a new line.
+ * 		Check if a Doccam tag at \p Pos in \p SV starts a new line.
  *
  * @param[in] SV
  * 		String view to check.
@@ -329,18 +329,18 @@ struct MatchedTag {
   size_t Consumed;
 
   /// Reference to the tag that was found
-  const DoxygenTag *Tag;
+  const DoccamTag *Tag;
 };
 
 /**
  * @brief
- * 		Attempt to match a Doxygen tag at \p Pos in \p SV.
+ * 		Attempt to match a Doccam tag at \p Pos in \p SV.
  *
  * @param[in] SV
  * 		String view to check.
  *
  * @param[in] Pos
- * 		Position in \p SV to check for a Doxygen tag.
+ * 		Position in \p SV to check for a Doccam tag.
  *
  * @param[in] Context
  * 		Tag context to limit the search to (e.g., Block tags only).
@@ -370,6 +370,6 @@ std::optional<MatchedTag> getTag(std::string_view SV, size_t Pos,
  */
 bool isTagTerminator(char C, bool IsInline);
 
-} // namespace clang::clangd::c32::doxygen
+} // namespace clang::clangd::c32::doccam
 
 #endif

@@ -824,7 +824,7 @@ struct FragmentCompiler {
                   .map("Markdown", Config::CommentFormatPolicy::Markdown)
                   .map("Doxygen", Config::CommentFormatPolicy::Doxygen)
                   // MARK: - C32 Begin
-                  .map("C32Doxygen", Config::CommentFormatPolicy::C32Doxygen)
+                  .map("Doccam", Config::CommentFormatPolicy::Doccam)
                   // MARK: - C32 End
                   .value())
         Out.Apply.push_back([Val](const Params &, Config &C) {
@@ -833,47 +833,45 @@ struct FragmentCompiler {
     }
   }
   // MARK: - C32 Begin
-  void compile(Fragment::C32Block &&F) { compile(std::move(F.Hover)); }
-  void compile(Fragment::C32Block::DocumentationBlock &&F) {
+  void compile(Fragment::C32Block &&F) { compile(std::move(F.Doccam)); }
+
+  void compile(Fragment::C32Block::DoccamBlock &&F) {
     if (F.RequireCommentAttachedToSymbol)
       Out.Apply.push_back([Value(**F.RequireCommentAttachedToSymbol)](
                               const Params &, Config &C) {
-        C.C32.Documentation.RequireCommentAttachedToSymbol = Value;
+        C.C32.Doccam.RequireCommentAttachedToSymbol = Value;
       });
-  }
-  void compile(Fragment::C32Block::HoverBlock &&F) {
-    if (F.ShowHoveringOver)
-      Out.Apply.push_back(
-          [Value(**F.ShowHoveringOver)](const Params &, Config &C) {
-            C.C32.Hover.ShowHoveringOver = Value;
-          });
 
+    compile(std::move(F.Hover));
+  }
+
+  void compile(Fragment::C32Block::DoccamBlock::HoverBlock &&F) {
     if (F.ShowProvider)
       Out.Apply.push_back([Value(**F.ShowProvider)](const Params &, Config &C) {
-        C.C32.Hover.ShowProvider = Value;
+        C.C32.Doccam.Hover.ShowProvider = Value;
       });
 
     if (F.ShowScope)
       Out.Apply.push_back([Value(**F.ShowScope)](const Params &, Config &C) {
-        C.C32.Hover.ShowScope = Value;
+        C.C32.Doccam.Hover.ShowScope = Value;
       });
 
     if (F.ShowSizeAndOffset)
       Out.Apply.push_back(
           [Value(**F.ShowSizeAndOffset)](const Params &, Config &C) {
-            C.C32.Hover.ShowSizeAndOffset = Value;
+            C.C32.Doccam.Hover.ShowSizeAndOffset = Value;
           });
 
     if (F.ShowProvidedSymbols)
       Out.Apply.push_back(
           [Value(**F.ShowProvidedSymbols)](const Params &, Config &C) {
-            C.C32.Hover.ShowProvidedSymbols = Value;
+            C.C32.Doccam.Hover.ShowProvidedSymbols = Value;
           });
 
     if (F.ShowCalleeInfo)
       Out.Apply.push_back(
           [Value(**F.ShowCalleeInfo)](const Params &, Config &C) {
-            C.C32.Hover.ShowCalleeInfo = Value;
+            C.C32.Doccam.Hover.ShowCalleeInfo = Value;
           });
   }
   // MARK: - C32 End

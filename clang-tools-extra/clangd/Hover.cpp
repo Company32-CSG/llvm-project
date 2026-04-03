@@ -66,9 +66,10 @@
 #include <vector>
 
 // MARK: - C32 Begin
-#include "c32-doxygen/Utils.hpp"
+#include "c32-doccam/Utils.hpp"
 
 namespace clang::clangd::c32 {
+// Forward declaration to allow definition to stay at the end of the file...
 static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
                                     const Inclusion &Inc, PrintingPolicy &PP);
 } // namespace clang::clangd::c32
@@ -392,6 +393,12 @@ HoverInfo::Param toHoverInfoParam(const ParmVarDecl *PVD,
     llvm::raw_string_ostream OS(*Out.Default);
     DefArg->printPretty(OS, nullptr, PP);
   }
+  // MARK: - C32 Begin
+  if (const auto *FD =
+          llvm::dyn_cast<FunctionDecl>(PVD->getParentFunctionOrMethod())) {
+    Out.ParentFunctionOrMethodName = FD->getNameAsString();
+  }
+  // MARK: - C32 End
   return Out;
 }
 
@@ -694,6 +701,8 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
     HI.Type = printType(TAT->getTemplatedDecl()->getUnderlyingType(), Ctx, PP);
 
   // MARK: - C32 Begin
+  // Replacing the logic here (commented out) instead of working it in with C32
+  // additions.
 
   // // Fill in value with evaluated initializer if possible.
   // if (const auto *Var = dyn_cast<VarDecl>(D); Var && !Var->isInvalidDecl()) {
@@ -908,6 +917,22 @@ HoverInfo getHoverContents(const DefinedMacro &Macro, const syntax::Token &Tok,
         break;
       }
     }
+
+    // MARK: - C32 Begin
+    if (Config::current().Documentation.CommentFormat ==
+        Config::CommentFormatPolicy::Doccam) {
+
+      /* Store the raw macro definition without the expansion text */
+      if (!HI.Definition.empty()) {
+        HI.EnhancedInfo.RawMacroDefinition = HI.Definition;
+      }
+
+      /* Store the macro expansion text separately */
+      if (!ExpansionText.empty()) {
+        HI.EnhancedInfo.MacroExpansionText = ExpansionText;
+      }
+    }
+    // MARK: - C32 End
 
     if (!ExpansionText.empty()) {
       if (!HI.Definition.empty()) {
@@ -1488,15 +1513,37 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
   if (!HI)
     return std::nullopt;
 
+  // Reformat Definition
+  if (!HI->Definition.empty()) {
+    auto Replacements = format::reformat(
+        Style, HI->Definition, tooling::Range(0, HI->Definition.size()));
+    if (auto Formatted =
+            tooling::applyAllReplacements(HI->Definition, Replacements))
+      HI->Definition = *Formatted;
+  }
+
   // MARK: - C32 Begin
-  //   // Reformat Definition
-  //   if (!HI->Definition.empty()) {
-  //     auto Replacements = format::reformat(
-  //         Style, HI->Definition, tooling::Range(0, HI->Definition.size()));
-  //     if (auto Formatted =
-  //             tooling::applyAllReplacements(HI->Definition, Replacements))
-  //       HI->Definition = *Formatted;
-  //   }
+  if (Config::current().Documentation.CommentFormat ==
+      Config::CommentFormatPolicy::Doccam) {
+    if (HI->EnhancedInfo.RawMacroDefinition) {
+      auto Replacements = format::reformat(
+          Style, (*HI->EnhancedInfo.RawMacroDefinition),
+          tooling::Range(0, (*HI->EnhancedInfo.RawMacroDefinition).size()));
+      if (auto Formatted = tooling::applyAllReplacements(
+              (*HI->EnhancedInfo.RawMacroDefinition), Replacements))
+        (*HI->EnhancedInfo.RawMacroDefinition) = *Formatted;
+    }
+
+    if (HI->EnhancedInfo.MacroExpansionText) {
+      auto Replacements = format::reformat(
+          Style, (*HI->EnhancedInfo.MacroExpansionText),
+          tooling::Range(0, (*HI->EnhancedInfo.MacroExpansionText).size()));
+      if (auto Formatted = tooling::applyAllReplacements(
+              (*HI->EnhancedInfo.MacroExpansionText), Replacements))
+        (*HI->EnhancedInfo.MacroExpansionText) = *Formatted;
+    }
+  }
+
   HI->EnhancedInfo.Style = Style;
   // MARK: - C32 End
 
@@ -1846,8 +1893,8 @@ markup::Document HoverInfo::presentDefault() const {
 }
 
 std::string HoverInfo::present(MarkupKind Kind) const {
+  const Config &Cfg = Config::current();
   if (Kind == MarkupKind::Markdown) {
-    const Config &Cfg = Config::current();
     if (Cfg.Documentation.CommentFormat ==
         Config::CommentFormatPolicy::Markdown)
       return presentDefault().asMarkdown();
@@ -1859,9 +1906,8 @@ std::string HoverInfo::present(MarkupKind Kind) const {
       // the plain text output.
       return presentDefault().asEscapedMarkdown();
     // MARK: - C32 Begin
-    if (Cfg.Documentation.CommentFormat ==
-        Config::CommentFormatPolice::C32Doxygen)
-      return EnhancedInfo.presentC32Doxygen().markdown();
+    if (Cfg.Documentation.CommentFormat == Config::CommentFormatPolicy::Doccam)
+      return presentDoccam().markdown();
     // MARK: - C32 End
   }
 

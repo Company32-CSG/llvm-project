@@ -332,20 +332,32 @@ private:
     });
     Dict.parse(N);
   }
+
   // MARK: - C32 Begin
   void parse(Fragment::C32Block &F, Node &N) {
     DictParser Dict("C32", this);
 
-    Dict.handle("Documentation", [&](Node &N) {
-      Fragment::C32Block::DocumentationBlock Documentation;
+    Dict.handle("Doccam", [&](Node &N) {
+      Fragment::C32Block::DoccamBlock Doccam;
 
-      parse(Documentation, N);
+      parse(Doccam, N);
 
-      F.Documentation = std::move(Documentation);
+      F.Doccam = std::move(Doccam);
+    });
+
+    Dict.parse(N);
+  }
+
+  void parse(Fragment::C32Block::DoccamBlock &F, Node &N) {
+    DictParser Dict("Doccam", this);
+
+    Dict.handle("RequireCommentAttachedToSymbol", [&](Node &N) {
+      F.RequireCommentAttachedToSymbol =
+          boolValue(N, "RequireCommentAttachedToSymbol");
     });
 
     Dict.handle("Hover", [&](Node &N) {
-      Fragment::C32Block::HoverBlock Hover;
+      Fragment::C32Block::DoccamBlock::HoverBlock Hover;
 
       parse(Hover, N);
 
@@ -354,22 +366,9 @@ private:
 
     Dict.parse(N);
   }
-  void parse(Fragment::C32Block::DocumentationBlock &F, Node &N) {
-    DictParser Dict("Documentation", this);
 
-    Dict.handle("RequireCommentAttachedToSymbol", [&](Node &N) {
-      F.RequireCommentAttachedToSymbol =
-          boolValue(N, "RequireCommentAttachedToSymbol");
-    });
-
-    Dict.parse(N);
-  }
-  void parse(Fragment::C32Block::HoverBlock &F, Node &N) {
+  void parse(Fragment::C32Block::DoccamBlock::HoverBlock &F, Node &N) {
     DictParser Dict("Hover", this);
-
-    Dict.handle("ShowHoveringOver", [&](Node &N) {
-      F.ShowHoveringOver = boolValue(N, "ShowHoveringOver");
-    });
 
     Dict.handle("ShowProvider", [&](Node &N) {
       F.ShowProvider = boolValue(N, "ShowProvider");
@@ -393,6 +392,7 @@ private:
     Dict.parse(N);
   }
   // MARK: - C32 End
+
   // Helper for parsing mapping nodes (dictionaries).
   // We don't use YamlIO as we want to control over unknown keys.
   class DictParser {

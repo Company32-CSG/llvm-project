@@ -73,6 +73,12 @@
 #include <limits>
 #include <optional>
 #include <utility>
+// MARK: - C32 Begin
+#include "c32-doccam/DoccamCompletion.hpp"
+#include "c32-doccam/DoccamParser.hpp"
+#include "c32-doccam/Markdown.hpp"
+#include "c32-doccam/to_string.hpp"
+// MARK: - C32 End
 
 // We log detailed candidate here if you run with -debug-only=codecomplete.
 #define DEBUG_TYPE "CodeComplete"
@@ -523,6 +529,9 @@ struct CodeCompletionBuilder {
         if (!Doc.empty()) {
           Completion.Documentation.emplace();
           parseDocumentation(Doc, *Completion.Documentation);
+          // MARK: - C32 Begin
+          Completion.RawDocumentation = Doc.str();
+          // MARK: - C32 End
         }
       };
       if (C.IndexResult) {
@@ -1202,10 +1211,20 @@ public:
       auto IndexDocIt =
           SS.IDForDoc ? FetchedDocs.find(SS.IDForDoc) : FetchedDocs.end();
       if (IndexDocIt != FetchedDocs.end()) {
-        markup::Document SignatureComment;
-        parseDocumentation(IndexDocIt->second, SignatureComment);
-        SS.Signature.documentation =
-            renderDoc(SignatureComment, DocumentationFormat);
+        // MARK: - C32 Begin
+        const auto &Cfg = Config::current();
+        if (Cfg.Documentation.CommentFormat ==
+            Config::CommentFormatPolicy::Doccam) {
+          c32::markdown::Document C32Doc;
+          c32::doccam::renderDocumentation(IndexDocIt->second, C32Doc);
+          SS.Signature.documentation = renderDoc(C32Doc, DocumentationFormat);
+        } else {
+          markup::Document SignatureComment;
+          parseDocumentation(IndexDocIt->second, SignatureComment);
+          SS.Signature.documentation =
+              renderDoc(SignatureComment, DocumentationFormat);
+        }
+        // MARK: - C32 End
       }
 
       SigHelp.signatures.push_back(std::move(SS.Signature));
@@ -1267,9 +1286,20 @@ private:
     SignatureQualitySignals Signal;
     const char *ReturnType = nullptr;
 
-    markup::Document OverloadComment;
-    parseDocumentation(formatDocumentation(CCS, DocComment), OverloadComment);
-    Signature.documentation = renderDoc(OverloadComment, DocumentationFormat);
+    // MARK: - C32 Begin
+    const auto &Cfg = Config::current();
+    std::string FormattedDoc = formatDocumentation(CCS, DocComment);
+    if (Cfg.Documentation.CommentFormat ==
+        Config::CommentFormatPolicy::Doccam) {
+      c32::markdown::Document C32Doc;
+      c32::doccam::renderDocumentation(FormattedDoc, C32Doc);
+      Signature.documentation = renderDoc(C32Doc, DocumentationFormat);
+    } else {
+      markup::Document OverloadComment;
+      parseDocumentation(FormattedDoc, OverloadComment);
+      Signature.documentation = renderDoc(OverloadComment, DocumentationFormat);
+    }
+    // MARK: - C32 End
     Signal.Kind = Candidate.getKind();
 
     for (const auto &Chunk : CCS) {
@@ -1931,6 +1961,9 @@ private:
         auto &C = Output.Completions[SymbolToCompletion.at(S.ID)];
         C.Documentation.emplace();
         parseDocumentation(S.Documentation, *C.Documentation);
+        // MARK: - C32 Begin
+        C.RawDocumentation = S.Documentation.str();
+        // MARK: - C32 End
       });
     }
 
@@ -2319,25 +2352,23 @@ CodeCompleteResult codeComplete(PathRef FileName, Position Pos,
   auto Content = llvm::StringRef(ParseInput.Contents).take_front(*Offset);
 
   // MARK: - C32 Begin
-  if (auto Result =
-          c32::maybeCompleteDoxygenComment(FileName, ParseInput, Preamble, Opts,
-                                           SpecFuzzyFind, *Offset, Content))
+  if (auto Result = c32::doccam::maybeCompleteDoccamComment(
+          FileName, Preamble, ParseInput, Opts, SpecFuzzyFind, Content,
+          *Offset)) {
     return std::move(*Result);
-  //   if (auto OffsetBeforeComment =
-  //   maybeFunctionArgumentCommentStart(Content)) {
-  //     // We are doing code completion of a comment, where we currently only
-  //     // support completing param names in function calls. To do this, we
-  //     // require information from Sema, but Sema's comment completion stops
-  //     at
-  //     // parsing, so we must move back the position before running it,
-  //     extract
-  //     // information we need and construct completion items ourselves.
-  //     auto CommentPrefix = Content.substr(*OffsetBeforeComment + 2).trim();
-  //     return codeCompleteComment(FileName, *OffsetBeforeComment,
-  //     CommentPrefix,
-  //                                Preamble, ParseInput);
-  //   }
+  }
   // MARK: - C32 End
+
+  if (auto OffsetBeforeComment = maybeFunctionArgumentCommentStart(Content)) {
+    // We are doing code completion of a comment, where we currently only
+    // support completing param names in function calls. To do this, we
+    // require information from Sema, but Sema's comment completion stops
+    // at parsing, so we must move back the position before running it,
+    // extract information we need and construct completion items ourselves.
+    auto CommentPrefix = Content.substr(*OffsetBeforeComment + 2).trim();
+    return codeCompleteComment(FileName, *OffsetBeforeComment, CommentPrefix,
+                               Preamble, ParseInput);
+  }
 
   auto Flow = CodeCompleteFlow(
       FileName, Preamble ? Preamble->Includes : IncludeStructure(),
@@ -2437,12 +2468,26 @@ CompletionItem CodeCompletion::render(const CodeCompleteOptions &Opts) const {
   // Combine header information and documentation in LSP `documentation` field.
   // This is not quite right semantically, but tends to display well in editors.
   if (InsertInclude || Documentation) {
-    markup::Document Doc;
-    if (InsertInclude)
-      Doc.addParagraph().appendText("From ").appendCode(InsertInclude->Header);
-    if (Documentation)
-      Doc.append(*Documentation);
-    LSP.documentation = renderDoc(Doc, Opts.DocumentationFormat);
+    // MARK: - C32 Begin
+    const auto &Cfg = Config::current();
+    if (Cfg.Documentation.CommentFormat ==
+            Config::CommentFormatPolicy::Doccam &&
+        RawDocumentation) {
+      c32::markdown::Document C32Doc;
+      if (InsertInclude)
+        C32Doc.paragraph().text("From ").code(InsertInclude->Header);
+      c32::doccam::renderDocumentation(*RawDocumentation, C32Doc);
+      LSP.documentation = renderDoc(C32Doc, Opts.DocumentationFormat);
+    } else {
+      markup::Document Doc;
+      if (InsertInclude)
+        Doc.addParagraph().appendText("From ").appendCode(
+            InsertInclude->Header);
+      if (Documentation)
+        Doc.append(*Documentation);
+      LSP.documentation = renderDoc(Doc, Opts.DocumentationFormat);
+    }
+    // MARK: - C32 End
   }
   LSP.sortText = sortText(Score.Total, FilterText);
   LSP.filterText = FilterText;
@@ -2540,220 +2585,6 @@ bool allowImplicitCompletion(llvm::StringRef Content, unsigned Offset) {
 }
 // MARK: - C32 Begin
 namespace c32 {
-
-markdown::Document presentBrief(std::string contents) {
-  markdown::Document output;
-
-  if (!contents.empty()) {
-    auto parsed = c32::doxygen::parse(contents, format::getGNUStyle());
-
-    bool keepDivider = false;
-
-    /* Append the brief/description */
-    if (!parsed.brief.empty()) {
-      output.paragraph().text(parsed.brief);
-    }
-
-    /* Append untagged user lines */
-    if (!parsed.untaggedLines.empty()) {
-      auto &paragraph = output.paragraph();
-
-      for (const auto &line : parsed.untaggedLines) {
-        paragraph.text(line).newline();
-      }
-    }
-
-    /* Divider between the hover's heading with signature+brief and the rest */
-    auto &divider = output.line();
-
-    /* Append all warning tags */
-    if (!parsed.warnings.empty()) {
-      keepDivider = true;
-
-      output.heading(2U).text("⚠️ Warning");
-
-      auto &list = output.list().compact();
-
-      for (const auto &warning : parsed.warnings) {
-        list.item().text(warning).italic();
-      }
-    }
-
-    /* Append deprecated warning */
-    if (!parsed.deprecated.empty()) {
-      keepDivider = true;
-
-      output.heading(3U).text("Deprecated").strikethrough();
-
-      output.paragraph().text(parsed.deprecated);
-    }
-
-    /* Append a thick divider to separate warnings from the rest of the content
-     */
-    if (!parsed.warnings.empty() || !parsed.deprecated.empty()) {
-      output.line();
-    }
-
-    /* Append function parameters */
-    if (!parsed.parameters.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      output.heading(3U).text("Parameters");
-
-      for (const auto &param : parsed.parameters) {
-        auto &paragraph = output.paragraph();
-
-        if (c32::doxygen::ParameterTag::Specifier::None != param.specifiers) {
-          paragraph.code(std::to_string(param.specifiers)).space();
-        }
-
-        paragraph.code(param.name)
-            .space()
-            .text("→")
-            .space()
-            .text(param.description);
-      }
-    }
-
-    /* Append the collected @throw/@throws tags */
-    if (!parsed.tparams.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      output.heading(3U).text("Template Params");
-
-      auto &list = output.list();
-
-      for (const auto &[key, val] : llvm::reverse(parsed.tparams)) {
-        auto &item = list.item();
-
-        item.code(key).bold();
-
-        if (!val.empty()) {
-          item.space().text("→").space().text(val);
-        }
-      }
-    }
-
-    /* Append the return type description */
-    if (!parsed.returns.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      output.heading(3U).text("Returns");
-      output.paragraph().text(parsed.returns);
-    }
-
-    /* Append the collected @retval/@result tags */
-    if (!parsed.retvals.empty()) {
-      /* Add the 'Returns' heading if the user didn't specify a @returns tag */
-      if (parsed.returns.empty()) {
-        if (keepDivider)
-          output.line();
-        else
-          keepDivider = true;
-
-        output.heading(3U).text("Returns");
-      }
-
-      auto &list = output.list();
-
-      for (const auto &[key, val] : llvm::reverse(parsed.retvals)) {
-        auto &item = list.item();
-
-        item.code(key).bold();
-
-        if (!val.empty()) {
-          item.space().text("→").space().text(val);
-        }
-      }
-    }
-
-    /* Append the collected @throw/@throws tags */
-    if (!parsed.throws.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      output.heading(3U).text("Throws");
-
-      auto &list = output.list();
-
-      for (const auto &[key, val] : llvm::reverse(parsed.throws)) {
-        auto &item = list.item();
-
-        item.code(key).bold();
-
-        if (!val.empty()) {
-          item.space().text("→").space().text(val);
-        }
-      }
-    }
-
-    /* Append the @version/@available/@availability tag */
-    if (!parsed.version.first.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      output.heading(3U).text("Availability");
-
-      auto &paragraph = output.paragraph();
-
-      paragraph.code(parsed.version.first);
-
-      if (!parsed.version.second.empty()) {
-        paragraph.space().text("→").space().text(parsed.version.second);
-      }
-    }
-
-    /* Append custom Doxygen tags that we don't intercept */
-    if (!parsed.customTags.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      for (const auto &customTag : parsed.customTags) {
-        output.heading(3U).text(customTag.name);
-
-        output.paragraph().text(customTag.body);
-      }
-    }
-
-    /* Append any examples */
-    if (!parsed.codeExamples.empty()) {
-      if (keepDivider)
-        output.line();
-      else
-        keepDivider = true;
-
-      for (const auto &exp : parsed.codeExamples) {
-        output.heading(3U).text(exp.name);
-
-        output.paragraph().text("{").bold();
-
-        output.codeBlock(exp.lang, c32::indentLines(exp.code));
-
-        output.paragraph().text("}").bold();
-      }
-    }
-
-    if (!keepDivider)
-      divider.thickness(0U);
-  }
-
-  return output;
-}
 
 CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
                                         const PreambleData *Preamble,

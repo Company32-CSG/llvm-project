@@ -50,8 +50,8 @@
 #include <utility>
 #include <vector>
 // MARK: - C32 Begin
-#include "c32-doxygen/Doxygen.hpp"
-#include "c32-doxygen/DoxygenCompletion.hpp"
+#include "c32-doccam/Doccam.hpp"
+#include "c32-doccam/DoccamCompletion.hpp"
 // MARK: - C32 End
 
 namespace clang {
@@ -1807,9 +1807,9 @@ bool ClangdLSPServer::shouldRunCompletion(
     return true;
   }
   // MARK: - C32 Begin
-  if (c32::doxygen::inDoxygenComment(*Code, *Offset))
-    return c32::doxygen::shouldRunCompletion(*Code, *Offset,
-                                             Params.context.triggerCharacter);
+  if (c32::doccam::inDoccamComment(*Code, *Offset))
+    return c32::doccam::shouldRunCompletion(*Code, *Offset,
+                                            Params.context.triggerCharacter);
   // MARK: - C32 End
   return allowImplicitCompletion(*Code, *Offset);
 }

@@ -116,11 +116,11 @@ add_clang_library(clangDaemon STATIC
   XRefs.cpp
   ${COMPLETIONMODEL_SOURCES}
   # MARK: - C32 Begin
-  c32-doxygen/Doxygen.cpp
-  c32-doxygen/DoxygenCompletion.cpp
-  c32-doxygen/DoxygenHover.cpp
-  c32-doxygen/DoxygenParser.cpp
-  c32-doxygen/Utils.cpp
+  c32-doccam/Doccam.cpp
+  c32-doccam/DoccamCompletion.cpp
+  c32-doccam/DoccamHover.cpp
+  c32-doccam/DoccamParser.cpp
+  c32-doccam/Utils.cpp
   # MARK: - C32 End
   index/Background.cpp
   index/BackgroundIndexLoader.cpp

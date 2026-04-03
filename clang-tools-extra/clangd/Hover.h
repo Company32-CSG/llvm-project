@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 // MARK: - C32 Begin
-#include "c32-doxygen/Markdown.hpp"
+#include "c32-doccam/Markdown.hpp"
 // MARK: - C32 End
 
 namespace clang {
@@ -54,6 +54,9 @@ struct HoverInfo {
     std::optional<std::string> Name;
     /// std::nullopt if no default is provided.
     std::optional<std::string> Default;
+    // MARK: - C32 Begin
+    std::optional<std::string> ParentFunctionOrMethodName;
+    // MARK: - C32 End
   };
 
   /// For a variable named Bar, declared in clang::clangd::Foo::getFoo the
@@ -167,16 +170,31 @@ struct HoverInfo {
 
     format::FormatStyle Style;
 
-    /// When `Kind` is `SymbolKind::TypeAlias` this reflects the real type.
+    /// Underlying symbol kind for type aliases.
+    /// Usable when `Kind` is `SymbolKind::TypeAlias`.
     std::optional<index::SymbolKind> UnderlyingKind;
 
-    /// Set for macros; expanded view of the macro
-    std::optional<std::string> Expanded;
+    /// Store the raw macro definition since the upstream definition is altered
+    /// to include expansion.
+    /// Usable when `Kind` is `SymbolKind::Macro`.
+    std::optional<std::string> RawMacroDefinition;
 
+    /// Store the macro definition with formatting applied separate to
+    /// Config::Definition.
+    /// Usable when `Kind` is `SymbolKind::Macro`.
+    std::optional<std::string> MacroExpansionText;
+
+    /// Store the name of the parent enum if this symbol is an enum member.
+    /// Usable when `Kind` is `SymbolKind::EnumConstant`.
     std::optional<std::string> ParentEnumName;
 
+    /// Store the enum members if this symbol is an enum.
+    /// Usable when `Kind` is `SymbolKind::Enum`.
     std::optional<std::vector<EnumMember>> EnumMembers;
 
+    /// Store the symbols provided by the header when hovering over `#include`
+    /// directives.
+    /// Usable when `Kind` is `SymbolKind::IncludeDirective`.
     std::vector<UsedSymbol> ProvidedSymbols;
 
     inline index::SymbolKind concreteKind(index::SymbolKind ForKind) const {
@@ -187,11 +205,10 @@ struct HoverInfo {
 
       return ForKind;
     }
-
-    c32::markdown::Document presentC32Doxygen();
   };
   EnhancedInfo EnhancedInfo;
   // MARK: - C32 End
+
   /// Produce a user-readable information based on the specified markup kind.
   std::string present(MarkupKind Kind) const;
 
@@ -209,6 +226,11 @@ private:
 
   /// Render the hover information as a default documentation.
   markup::Document presentDefault() const;
+
+  // MARK: - C32 Begin
+  /// Render the hover information as Doccam documentation.
+  c32::markdown::Document presentDoccam() const;
+  // MARK: - C32 End
 };
 
 inline bool operator==(const HoverInfo::PrintedType &LHS,

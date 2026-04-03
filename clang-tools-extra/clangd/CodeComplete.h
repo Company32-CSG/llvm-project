@@ -190,6 +190,10 @@ struct CodeCompletion {
   std::string ReturnType;
   // The parsed documentation comment.
   std::optional<markup::Document> Documentation;
+  // MARK: - C32 Begin
+  // Raw documentation string, preserved for c32 rendering without mangling.
+  std::optional<std::string> RawDocumentation;
+  // MARK: - C32 End
   CompletionItemKind Kind = CompletionItemKind::Missing;
   // This completion item may represent several symbols that can be inserted in
   // the same way, such as function overloads. In this case BundleSize > 1, and

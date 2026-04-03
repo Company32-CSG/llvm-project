@@ -1,5 +1,5 @@
-#include "Doxygen.hpp"
-#include "Utils.hpp"
+#include "c32-doccam/Doccam.hpp"
+#include "c32-doccam/Utils.hpp"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -9,10 +9,10 @@
 #include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32::doxygen {
+namespace clang::clangd::c32::doccam {
 
-const std::vector<DoxygenTag> TagList = {
-    // MARK: - Lightbulb Doxygen Tags
+const std::vector<DoccamTag> TagList = {
+    // MARK: - Lightbulb Doccam Tags
     {TagType::A, TagParsingFlags(true, false, false), "a",
      "Render the argument following this tag in italics."},
     {TagType::B, TagParsingFlags(true, false, false), "b",
@@ -77,7 +77,7 @@ const std::vector<DoxygenTag> TagList = {
     {TagType::Warning, TagParsingFlags(false, false), "warning",
      "Provide a warning to anyone using the documented symbol."},
 
-    // MARK: - Unhandled Doxygen Tags
+    // MARK: - Unhandled Doccam Tags
     {TagType::Custom, TagParsingFlags(false, true), "note",
      "Additional notes or commentary."},
     {TagType::Custom, TagParsingFlags(false, false), "attention",
@@ -151,9 +151,7 @@ constexpr char TagInitiatorList[] = {'@', '\\', '%'};
 
 // MARK: - Functions
 
-const llvm::ArrayRef<DoxygenTag> getAllTags() {
-  return llvm::ArrayRef(TagList);
-}
+const llvm::ArrayRef<DoccamTag> getAllTags() { return llvm::ArrayRef(TagList); }
 
 const std::vector<std::string_view> getAllTagNames() {
   std::vector<std::string_view> R;
@@ -178,7 +176,7 @@ const llvm::ArrayRef<char> getAllTagInitiators() {
   return llvm::ArrayRef(TagInitiatorList, std::size(TagInitiatorList));
 }
 
-const DoxygenTag *getTagByType(TagType Type) {
+const DoccamTag *getTagByType(TagType Type) {
   for (const auto &T : TagList) {
     if (T.Type == Type)
       return &T;
@@ -187,7 +185,7 @@ const DoxygenTag *getTagByType(TagType Type) {
   return nullptr;
 }
 
-bool isDoxygenTagInitiator(std::string_view Contents) {
+bool isDoccamTagInitiator(std::string_view Contents) {
   for (const auto &INI : TagInitiatorList) {
     if (0U == Contents.rfind(INI, 0U))
       return true;
@@ -196,7 +194,7 @@ bool isDoxygenTagInitiator(std::string_view Contents) {
   return false;
 }
 
-bool isDoxygenTagInitiator(char C) {
+bool isDoccamTagInitiator(char C) {
   for (const auto &INI : TagInitiatorList) {
     if (INI == C)
       return true;
@@ -205,7 +203,7 @@ bool isDoxygenTagInitiator(char C) {
   return false;
 }
 
-const DoxygenTag *getDoxygenTagByName(std::string_view Name) {
+const DoccamTag *getDoccamTagByName(std::string_view Name) {
   auto Lower = lowercase(Name);
 
   for (const auto &T : TagList) {
@@ -248,7 +246,7 @@ bool isEscaping(std::string_view Contents, size_t Offset) {
   return ('^' == Contents[Offset - 1U]);
 }
 
-bool isDoxygenEscape(const char C) { return ('^' == C); }
+bool isDoccamEscape(const char C) { return ('^' == C); }
 
 std::string unescape(std::string_view SV) {
   std::string R;
@@ -258,7 +256,7 @@ std::string unescape(std::string_view SV) {
   bool Escape = false;
 
   for (size_t I = 0U; I < SV.size(); I++) {
-    if (isDoxygenEscape(SV[I]) && !Escape) {
+    if (isDoccamEscape(SV[I]) && !Escape) {
       Escape = true;
 
       continue;
@@ -302,10 +300,10 @@ std::optional<MatchedTag> getTag(std::string_view SV, size_t Pos,
   if (Pos >= SV.size())
     return std::nullopt;
 
-  if (0U != Pos && isDoxygenEscape(SV[Pos - 1U]))
+  if (0U != Pos && isDoccamEscape(SV[Pos - 1U]))
     return std::nullopt;
 
-  if (!isDoxygenTagInitiator(SV[Pos]))
+  if (!isDoccamTagInitiator(SV[Pos]))
     return std::nullopt;
 
   R.INI = SV[Pos];
@@ -396,4 +394,4 @@ bool isTagTerminator(char C, bool IsInline) {
   return (false == OK);
 }
 
-} // namespace clang::clangd::c32::doxygen
+} // namespace clang::clangd::c32::doccam
