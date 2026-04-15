@@ -450,6 +450,10 @@ struct Fragment {
         /// Passing `Moe` as `name_value` (converted to `std::string`)
         /// ```
         std::optional<Located<bool>> ShowCalleeInfo;
+
+        /// When `true`, prefer the formatting style from the workspace's
+        /// .clang-format when formatting code blocks in hover contents.
+        std::optional<Located<bool>> UseWorkspaceFormattingStyle;
       };
       HoverBlock Hover;
 

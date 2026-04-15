@@ -1,8 +1,8 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_COMPLETION_HPP
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_COMPLETION_HPP
-#include "../CodeComplete.h"
-#include "../ParsedAST.h"
+#include "CodeComplete.h"
 #include "Compiler.h"
+#include "ParsedAST.h"
 #include "Preamble.h"
 #include "support/Path.h"
 
@@ -112,20 +112,6 @@ bool inDoccamComment(std::string_view Contents, size_t CursorOffset);
  */
 bool shouldRunCompletion(std::string_view Contents, size_t CursorOffset,
                          std::string_view TriggerCharacter);
-
 } // namespace clang::clangd::c32::doccam
-
-namespace clang::clangd::c32 {
-
-/// Run standard code completion on patched contents (used by doccam
-/// reference completion to delegate back to the main completion engine).
-CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
-                                        const PreambleData *Preamble,
-                                        const ParseInputs &ParseInput,
-                                        CodeCompleteOptions Opts,
-                                        SpeculativeFuzzyFind *SpecFuzzyFind,
-                                        std::string_view PatchedContents);
-
-} // namespace clang::clangd::c32
 
 #endif

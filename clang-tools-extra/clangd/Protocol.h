@@ -281,7 +281,7 @@ struct TextDocumentEdit {
   /// The text document to change.
   VersionedTextDocumentIdentifier textDocument;
 
-	/// The edits to be applied.
+  /// The edits to be applied.
   /// FIXME: support the AnnotatedTextEdit variant.
   std::vector<TextEdit> edits;
 };
@@ -560,7 +560,7 @@ struct ClientCapabilities {
 
   /// The client supports versioned document changes for WorkspaceEdit.
   bool DocumentChanges = false;
-  
+
   /// The client supports change annotations on text edits,
   bool ChangeAnnotation = false;
 
@@ -592,6 +592,38 @@ struct ConfigurationSettings {
 };
 bool fromJSON(const llvm::json::Value &, ConfigurationSettings &,
               llvm::json::Path);
+// MARK: - C32 Begin
+
+/// \b MUST mirror \r c32::doccam::SymbolStyle.
+enum class DoccamContextSymbolStyle : unsigned {
+  None = (0U),
+  Codicon = (1U << 0U),
+  Emoji = (1U << 1U),
+  Glyph = (1U << 2U),
+
+  All = (Codicon | Emoji | Glyph),
+};
+inline DoccamContextSymbolStyle operator&(DoccamContextSymbolStyle LHS,
+                                          DoccamContextSymbolStyle RHS) {
+  return static_cast<DoccamContextSymbolStyle>(static_cast<unsigned>(LHS) &
+                                               static_cast<unsigned>(RHS));
+}
+inline bool isDoccamContextSymbolStyleSet(DoccamContextSymbolStyle LHS,
+                                          DoccamContextSymbolStyle RHS) {
+  return (LHS & RHS) == RHS;
+}
+bool fromJSON(const llvm::json::Value &, DoccamContextSymbolStyle &,
+              llvm::json::Path);
+
+struct DoccamContextParameters {
+  bool UseHtml;
+  DoccamContextSymbolStyle PreferredSymbolStyle;
+  DoccamContextSymbolStyle SupportedSymbolStyles;
+};
+bool fromJSON(const llvm::json::Value &, DoccamContextParameters &,
+              llvm::json::Path);
+
+// MARK: - C32 End
 
 /// Clangd extension: parameters configurable at `initialize` time.
 /// LSP defines this type as `any`.
@@ -608,6 +640,9 @@ struct InitializationOptions {
 
   /// Clients supports show file status for textDocument/clangd.fileStatus.
   bool FileStatus = false;
+  // MARK: - C32 Begin
+  std::optional<DoccamContextParameters> DoccamContextParams;
+  // MARK: - C32 End
 };
 bool fromJSON(const llvm::json::Value &, InitializationOptions &,
               llvm::json::Path);
@@ -1027,12 +1062,12 @@ struct WorkspaceEdit {
   /// Versioned document edits.
   ///
   /// If a client neither supports `documentChanges` nor
-	/// `workspace.workspaceEdit.resourceOperations` then only plain `TextEdit`s
-	/// using the `changes` property are supported.
+  /// `workspace.workspaceEdit.resourceOperations` then only plain `TextEdit`s
+  /// using the `changes` property are supported.
   std::optional<std::vector<TextDocumentEdit>> documentChanges;
-  
+
   /// A map of change annotations that can be referenced in
-	/// AnnotatedTextEdit.
+  /// AnnotatedTextEdit.
   std::map<std::string, ChangeAnnotation> changeAnnotations;
 };
 bool fromJSON(const llvm::json::Value &, WorkspaceEdit &, llvm::json::Path);
@@ -1288,13 +1323,13 @@ enum class InsertTextFormat {
 /// Additional details for a completion item label.
 struct CompletionItemLabelDetails {
   /// An optional string which is rendered less prominently directly after label
-	/// without any spacing. Should be used for function signatures or type
+  /// without any spacing. Should be used for function signatures or type
   /// annotations.
   std::string detail;
 
   /// An optional string which is rendered less prominently after
-	/// CompletionItemLabelDetails.detail. Should be used for fully qualified
-	/// names or file path.
+  /// CompletionItemLabelDetails.detail. Should be used for fully qualified
+  /// names or file path.
   std::string description;
 };
 llvm::json::Value toJSON(const CompletionItemLabelDetails &);

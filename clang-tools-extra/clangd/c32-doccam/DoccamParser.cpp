@@ -1,7 +1,7 @@
 #include "c32-doccam/DoccamParser.hpp"
 #include "c32-doccam/Doccam.hpp"
-#include "c32-doccam/Markdown.hpp"
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamMarkdown.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
 #include "c32-doccam/to_string.hpp"
 
 #include "clang/Format/Format.h"
@@ -642,7 +642,8 @@ ParsedDoccam parse(std::string_view Contents,
   return Doccam;
 }
 
-void renderDocumentation(std::string_view Raw, c32::markdown::Document &Out) {
+void renderDocumentation(std::string_view Raw,
+                         c32::doccam::markdown::Document &Out) {
   if (Raw.empty())
     return;
 
@@ -719,7 +720,7 @@ void renderDocumentation(std::string_view Raw, c32::markdown::Document &Out) {
   }
 
   for (const auto &Ex : Parsed.CodeExamples)
-    Out.codeBlock(Ex.Lang, c32::indentLines(Ex.Code));
+    Out.codeBlock(Ex.Lang, c32::doccam::indentLines(Ex.Code));
 }
 
 } // namespace clang::clangd::c32::doccam

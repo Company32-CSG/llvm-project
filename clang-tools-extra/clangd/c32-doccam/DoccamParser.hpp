@@ -5,9 +5,9 @@
 #include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32::markdown {
+namespace clang::clangd::c32::doccam::markdown {
 class Document;
-} // namespace clang::clangd::c32::markdown
+} // namespace clang::clangd::c32::doccam::markdown
 
 namespace clang::clangd::c32::doccam {
 
@@ -178,8 +178,10 @@ inline ParameterTag::Specifier operator&(ParameterTag::Specifier LHS,
 }
 
 /// Render a raw documentation string through the c32 doccam parser into a
-/// c32::markdown::Document suitable for code completion and signature help.
-void renderDocumentation(std::string_view Raw, c32::markdown::Document &Out);
+/// c32::doccam::markdown::Document suitable for code completion and signature
+/// help.
+void renderDocumentation(std::string_view Raw,
+                         c32::doccam::markdown::Document &Out);
 
 } // namespace clang::clangd::c32::doccam
 

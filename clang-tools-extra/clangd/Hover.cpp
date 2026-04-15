@@ -66,13 +66,14 @@
 #include <vector>
 
 // MARK: - C32 Begin
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamContext.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
 
-namespace clang::clangd::c32 {
+namespace clang::clangd::c32::doccam {
 // Forward declaration to allow definition to stay at the end of the file...
 static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
                                     const Inclusion &Inc, PrintingPolicy &PP);
-} // namespace clang::clangd::c32
+} // namespace clang::clangd::c32::doccam
 // MARK: - C32 End
 
 namespace clang {
@@ -792,7 +793,7 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
   HI.Definition = printDefinition(D, PP, TB);
 
   // MARK: - C32 Begin
-  HI.Definition = c32::canonicalizeWhitespace(HI.Definition);
+  HI.Definition = c32::doccam::canonicalizeWhitespace(HI.Definition);
   // MARK: - C32 End
   return HI;
 }
@@ -1426,7 +1427,7 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
 
     // MARK: - C32 Begin
     HI.EnhancedInfo.Style = Style;
-    c32::maybeAddProvidedSymbols(AST, HI, Inc, PP);
+    c32::doccam::maybeAddProvidedSymbols(AST, HI, Inc, PP);
     // MARK: - C32 End
     return HI;
   }
@@ -1523,27 +1524,6 @@ std::optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
   }
 
   // MARK: - C32 Begin
-  if (Config::current().Documentation.CommentFormat ==
-      Config::CommentFormatPolicy::Doccam) {
-    if (HI->EnhancedInfo.RawMacroDefinition) {
-      auto Replacements = format::reformat(
-          Style, (*HI->EnhancedInfo.RawMacroDefinition),
-          tooling::Range(0, (*HI->EnhancedInfo.RawMacroDefinition).size()));
-      if (auto Formatted = tooling::applyAllReplacements(
-              (*HI->EnhancedInfo.RawMacroDefinition), Replacements))
-        (*HI->EnhancedInfo.RawMacroDefinition) = *Formatted;
-    }
-
-    if (HI->EnhancedInfo.MacroExpansionText) {
-      auto Replacements = format::reformat(
-          Style, (*HI->EnhancedInfo.MacroExpansionText),
-          tooling::Range(0, (*HI->EnhancedInfo.MacroExpansionText).size()));
-      if (auto Formatted = tooling::applyAllReplacements(
-              (*HI->EnhancedInfo.MacroExpansionText), Replacements))
-        (*HI->EnhancedInfo.MacroExpansionText) = *Formatted;
-    }
-  }
-
   HI->EnhancedInfo.Style = Style;
   // MARK: - C32 End
 
@@ -1906,8 +1886,11 @@ std::string HoverInfo::present(MarkupKind Kind) const {
       // the plain text output.
       return presentDefault().asEscapedMarkdown();
     // MARK: - C32 Begin
+    const auto &DoccamCtx = c32::doccam::DoccamContext::current();
+    auto DoccamOpts = c32::doccam::markdown::RenderOptions(DoccamCtx);
+
     if (Cfg.Documentation.CommentFormat == Config::CommentFormatPolicy::Doccam)
-      return presentDoccam().markdown();
+      return presentDoccam().markdown(DoccamOpts);
     // MARK: - C32 End
   }
 
@@ -2005,7 +1988,7 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 }
 
 // MARK: - C32 Begin
-namespace c32 {
+namespace c32::doccam {
 static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
                                     const Inclusion &Inc, PrintingPolicy &PP) {
   auto Converted = convertIncludes(AST);
@@ -2050,7 +2033,7 @@ static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
                   HI.EnhancedInfo.ProvidedSymbols.end()),
       HI.EnhancedInfo.ProvidedSymbols.end());
 }
-} // namespace c32
+} // namespace c32::doccam
 // MARK: - C32 End
 
 } // namespace clangd

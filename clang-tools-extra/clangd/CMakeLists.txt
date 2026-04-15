@@ -117,10 +117,12 @@ add_clang_library(clangDaemon STATIC
   ${COMPLETIONMODEL_SOURCES}
   # MARK: - C32 Begin
   c32-doccam/Doccam.cpp
+  c32-doccam/DoccamContext.cpp
   c32-doccam/DoccamCompletion.cpp
   c32-doccam/DoccamHover.cpp
   c32-doccam/DoccamParser.cpp
-  c32-doccam/Utils.cpp
+  c32-doccam/DoccamSymbol.cpp
+  c32-doccam/DoccamUtils.cpp
   # MARK: - C32 End
   index/Background.cpp
   index/BackgroundIndexLoader.cpp

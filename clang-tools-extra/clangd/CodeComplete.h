@@ -339,6 +339,18 @@ CompletionPrefix guessCompletionPrefix(llvm::StringRef Content,
 // Whether it makes sense to complete at the point based on typed characters.
 // For instance, we implicitly trigger at `a->^` but not at `a>^`.
 bool allowImplicitCompletion(llvm::StringRef Content, unsigned Offset);
+// MARK: - C32 Begin
+namespace c32::doccam {
+/// Run standard code completion on patched contents (used by doccam
+/// reference completion to delegate back to the main completion engine).
+CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
+                                        const PreambleData *Preamble,
+                                        const ParseInputs &ParseInput,
+                                        CodeCompleteOptions Opts,
+                                        SpeculativeFuzzyFind *SpecFuzzyFind,
+                                        std::string_view PatchedContents);
+} // namespace c32::doccam
+// MARK: - C32 End
 } // namespace clangd
 } // namespace clang
 

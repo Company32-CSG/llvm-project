@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 // MARK: - C32 Begin
-#include "c32-doccam/Markdown.hpp"
+#include "c32-doccam/DoccamMarkdown.hpp"
 // MARK: - C32 End
 
 namespace clang {
@@ -229,7 +229,7 @@ private:
 
   // MARK: - C32 Begin
   /// Render the hover information as Doccam documentation.
-  c32::markdown::Document presentDoccam() const;
+  c32::doccam::markdown::Document presentDoccam() const;
   // MARK: - C32 End
 };
 

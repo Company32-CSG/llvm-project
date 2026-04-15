@@ -2,6 +2,7 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_TO_STRING_HPP
 #include "c32-doccam/Doccam.hpp"
 #include "c32-doccam/DoccamParser.hpp"
+
 #include "clang/Index/IndexSymbol.h"
 
 #include <string>

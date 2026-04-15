@@ -1,9 +1,41 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_UTILS_HPP
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_C32_DOCCAM_UTILS_HPP
+#include "clang/Format/Format.h"
+
 #include <string_view>
 #include <vector>
 
-namespace clang::clangd::c32 {
+namespace clang::clangd::c32::doccam {
+
+/**
+ * @brief
+ * 		Format the given code using either the given style or the
+ * default hover style based on the current configuration of
+ * `Config::current().C32.Doccam.Hover.UseWorkspaceFormattingStyle`
+ *
+ * @param[in] Style
+ * 		Style to format the code with.
+ *
+ * @param[in] Input
+ * 		Code to format.
+ *
+ * @returns
+ * 		Formatted code, or the original code if formatting failed.
+ */
+std::string formatCode(const format::FormatStyle &Style,
+                       std::string_view Input);
+
+/**
+ * @brief
+ * 		Escape HTML special characters in the given input string.
+ *
+ * @param[in] Input
+ * 		String to escape HTML characters in.
+ *
+ * @returns
+ * 		Copy of \p Input with HTML special characters escaped.
+ */
+std::string escapeHtml(std::string_view Input);
 
 /**
  * @brief
@@ -182,6 +214,6 @@ std::string uppercase(std::string_view Contents);
  */
 std::string properNounCase(std::string_view Contents);
 
-} // namespace clang::clangd::c32
+} // namespace clang::clangd::c32::doccam
 
 #endif

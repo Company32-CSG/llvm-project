@@ -52,6 +52,7 @@
 // MARK: - C32 Begin
 #include "c32-doccam/Doccam.hpp"
 #include "c32-doccam/DoccamCompletion.hpp"
+#include "c32-doccam/DoccamContext.hpp"
 // MARK: - C32 End
 
 namespace clang {
@@ -583,6 +584,14 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
     std::optional<WithContextValue> WithOffsetEncoding;
     if (Opts.Encoding)
       WithOffsetEncoding.emplace(kCurrentOffsetEncoding, *Opts.Encoding);
+    // MARK: - C32 Begin
+    std::optional<WithContextValue> WithDoccamContext;
+    if (Params.initializationOptions.DoccamContextParams)
+      WithDoccamContext.emplace(
+          c32::doccam::DoccamContext::ContextKey,
+          c32::doccam::DoccamContext(
+              *Params.initializationOptions.DoccamContextParams));
+    // MARK: - C32 End
     Server.emplace(*CDB, TFS, Opts,
                    static_cast<ClangdServer::Callbacks *>(this));
   }

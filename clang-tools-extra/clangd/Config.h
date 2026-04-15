@@ -262,6 +262,10 @@ struct Config {
         /// Passing `Moe` as `name_value` (converted to `std::string`)
         /// ```
         bool ShowCalleeInfo = true;
+
+        /// When `true`, prefer the formatting style from the workspace's
+        /// .clang-format when formatting code blocks in hover contents.
+        bool UseWorkspaceFormattingStyle = true;
       } Hover;
 
       /// If true, when completing a symbol, the documentation comment must be

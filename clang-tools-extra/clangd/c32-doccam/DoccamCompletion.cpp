@@ -1,6 +1,6 @@
 #include "c32-doccam/DoccamCompletion.hpp"
 #include "c32-doccam/Doccam.hpp"
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
 
 #include "CodeComplete.h"
 #include "Protocol.h"

@@ -1,5 +1,5 @@
 #include "c32-doccam/Doccam.hpp"
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"

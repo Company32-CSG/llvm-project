@@ -1,4 +1,8 @@
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
+
+#include "Config.h"
+
+#include "clang/Format/Format.h"
 
 #include <algorithm>
 #include <cctype>
@@ -6,9 +10,59 @@
 #include <string>
 #include <string_view>
 
-namespace clang::clangd::c32 {
+namespace clang::clangd::c32::doccam {
 
 /* ------------------------------------------------------------ */
+
+std::string formatCode(const format::FormatStyle &Style,
+                       std::string_view Input) {
+  auto &Cfg = Config::current();
+
+  auto EffectiveStyle = Style;
+
+  if (!Cfg.C32.Doccam.Hover.UseWorkspaceFormattingStyle) {
+    EffectiveStyle = format::getGNUStyle();
+  }
+
+  auto Replacements =
+      format::reformat(EffectiveStyle, Input, tooling::Range(0, Input.size()));
+
+  if (auto Formatted = tooling::applyAllReplacements(Input, Replacements))
+    return *Formatted;
+
+  return std::string(Input);
+}
+
+std::string escapeHtml(std::string_view Input) {
+  std::string R;
+
+  R.reserve(Input.size());
+
+  for (const char C : Input) {
+    switch (C) {
+    case '&':
+      R += "&amp;";
+      break;
+    case '<':
+      R += "&lt;";
+      break;
+    case '>':
+      R += "&gt;";
+      break;
+    case '"':
+      R += "&quot;";
+      break;
+    case '\'':
+      R += "&apos;";
+      break;
+    default:
+      R += C;
+      break;
+    }
+  }
+
+  return R;
+}
 
 bool lineStartsWith(std::string_view Contents, size_t CursorOffset,
                     std::string_view Prefix) {
@@ -221,4 +275,4 @@ std::string properNounCase(std::string_view Contents) {
   return R;
 }
 
-} // namespace clang::clangd::c32
+} // namespace clang::clangd::c32::doccam

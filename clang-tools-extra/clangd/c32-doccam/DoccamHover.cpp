@@ -1,15 +1,19 @@
+#include "c32-doccam/DoccamMarkdown.hpp"
 #include "c32-doccam/DoccamParser.hpp"
-#include "c32-doccam/Markdown.hpp"
-#include "c32-doccam/Utils.hpp"
+#include "c32-doccam/DoccamSymbol.hpp"
+#include "c32-doccam/DoccamUtils.hpp"
 #include "c32-doccam/to_string.hpp"
 
-#include "../Config.h"
-#include "../Hover.h"
 #include "llvm/Support/FormatVariadic.h"
+
+#include "Config.h"
+#include "Hover.h"
 
 namespace clang::clangd {
 
+// MARK: - Helper Functions
 namespace {
+
 static std::string formatSize(uint64_t SizeInBits) {
   uint64_t Value = SizeInBits % 8 == 0 ? SizeInBits / 8 : SizeInBits;
   const char *Unit = Value != 0 && Value == SizeInBits ? "bit" : "byte";
@@ -27,28 +31,33 @@ static std::string formatOffset(uint64_t OffsetInBits) {
 
 } // namespace
 
-c32::markdown::Document HoverInfo::presentDoccam() const {
-  const unsigned int TitleHeadingLevel = 3U;
-  const unsigned int SectionHeadingLevel = 4U;
-  c32::markdown::Document Output;
+// MARK: - Doccam Presentation
+
+c32::doccam::markdown::Document HoverInfo::presentDoccam() const {
+  const unsigned int TitleHeadingLevel = 2U;
+  const unsigned int SectionHeadingLevel = 3U;
+  c32::doccam::markdown::Document Output;
   const Config &Cfg = Config::current();
 
   auto ConcreteSymbolKind = EnhancedInfo.concreteKind(Kind);
 
   // MARK: - Helper Lambdas
+
   auto AddTitleFunc = [&]() {
     if (index::SymbolKind::Unknown == ConcreteSymbolKind)
       return;
 
     Output.heading(TitleHeadingLevel)
-        .text(c32::doccam::to_string(ConcreteSymbolKind));
+        .symbol(c32::doccam::symbolLookup(ConcreteSymbolKind)->Identifier)
+        .space()
+        .text(c32::doccam::to_string(ConcreteSymbolKind))
+        .semantic(c32::doccam::markdown::semanticStyleFromSymbolKind(
+            ConcreteSymbolKind));
   };
 
   auto MaybeAddProviderFunc = [&]() {
     if (Provider.empty() || !Cfg.C32.Doccam.Hover.ShowProvider)
       return;
-
-    Output.heading(SectionHeadingLevel).text("Provider");
 
     /* Append the header file that provides this symbol */
     Output.codeBlock(DefinitionLanguage, "#include " + Provider);
@@ -85,7 +94,9 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
       WorkingScope += "}";
     }
 
-    Output.codeBlock(DefinitionLanguage, WorkingScope);
+    auto Formatted = c32::doccam::formatCode(EnhancedInfo.Style, WorkingScope);
+
+    Output.codeBlock(DefinitionLanguage, Formatted);
   };
 
   auto MaybeAddSizeAndOffsetFunc = [&]() {
@@ -203,7 +214,7 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
     }
   };
 
-  auto AddDefinitionFunc = [&]() {
+  auto AddSymbolDefinitionFunc = [&]() {
     std::string WorkingDefinition;
 
     /* Don't use the upstream definition for macros, we store the raw expansion
@@ -213,21 +224,26 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
       /* Use the raw macro definition we stored instead of the normal Definition
        * to avoid altering the way upstream formats Definition for macros. */
       if (EnhancedInfo.RawMacroDefinition) {
-        WorkingDefinition += *EnhancedInfo.RawMacroDefinition;
+        auto Formatted = c32::doccam::formatCode(
+            EnhancedInfo.Style, *EnhancedInfo.RawMacroDefinition);
+
+        WorkingDefinition += Formatted;
       }
 
       Output.codeBlock(DefinitionLanguage, WorkingDefinition);
 
       /* If we have macro expansion text, display it */
       if (EnhancedInfo.MacroExpansionText) {
+        auto Formatted = c32::doccam::formatCode(
+            EnhancedInfo.Style, *EnhancedInfo.MacroExpansionText);
         Output.heading(SectionHeadingLevel).text("Expansion");
-        Output.codeBlock(DefinitionLanguage, *EnhancedInfo.MacroExpansionText);
+        Output.codeBlock(DefinitionLanguage, Formatted);
       }
 
       return;
     }
 
-    /* Append the symbol's definition (e.g., 'c32::markdown::Document
+    /* Append the symbol's definition (e.g., 'c32::doccam::markdown::Document
      * HoverInfo::presentDoccam() const') */
     if (!Definition.empty()) {
 
@@ -243,7 +259,10 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
         WorkingDefinition += Definition;
       }
 
-      Output.codeBlock(DefinitionLanguage, WorkingDefinition);
+      auto Formatted =
+          c32::doccam::formatCode(EnhancedInfo.Style, WorkingDefinition);
+
+      Output.codeBlock(DefinitionLanguage, Formatted);
 
       /* Thick divider between the 'KEY=n' definition and any doccam content */
       Output.line(/* Thickness */ 4U);
@@ -444,11 +463,9 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
             .space()
             .code(Exp.Lang);
 
-        Output.paragraph().text("{").bold();
+        auto Formatted = c32::doccam::formatCode(EnhancedInfo.Style, Exp.Code);
 
-        Output.codeBlock(Exp.Lang, c32::indentLines(Exp.Code));
-
-        Output.paragraph().text("}").bold();
+        Output.codeBlock(Exp.Lang, c32::doccam::indentLines(Formatted));
       }
     }
 
@@ -484,14 +501,14 @@ c32::markdown::Document HoverInfo::presentDoccam() const {
 
   // MARK: - Build Output
 
+  /* Maybe add the provider (typically an include directive) */
+  MaybeAddProviderFunc();
+
   /* Add the title for the hover info */
   AddTitleFunc();
 
   /* Add the symbol's definition/signature */
-  AddDefinitionFunc();
-
-  /* Maybe add the provider (typically an include directive) */
-  MaybeAddProviderFunc();
+  AddSymbolDefinitionFunc();
 
   /* Maybe add the symbol's namespace and local scopes */
   MaybeAddNamespaceAndScopeFunc();

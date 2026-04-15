@@ -209,7 +209,7 @@ bool fromJSON(const llvm::json::Value &Params, ChangeAnnotation &R,
          O.map("needsConfirmation", R.needsConfirmation) &&
          O.mapOptional("description", R.description);
 }
-llvm::json::Value toJSON(const ChangeAnnotation & CA) {
+llvm::json::Value toJSON(const ChangeAnnotation &CA) {
   llvm::json::Object Result{{"label", CA.label}};
   if (CA.needsConfirmation)
     Result["needsConfirmation"] = *CA.needsConfirmation;
@@ -1374,6 +1374,35 @@ bool fromJSON(const llvm::json::Value &Params, ConfigurationSettings &S,
   return mapOptOrNull(Params, "compilationDatabaseChanges",
                       S.compilationDatabaseChanges, P);
 }
+// MARK: - C32 Begin
+bool fromJSON(const llvm::json::Value &Params, DoccamContextSymbolStyle &Out,
+              llvm::json::Path P) {
+  llvm::json::ObjectMapper O(Params, P);
+  if (!O)
+    return true; // 'any' type in LSP.
+
+  auto Raw = Params.getAsUINT64();
+  if (!Raw)
+    return false;
+
+  if (*Raw > static_cast<uint64_t>(DoccamContextSymbolStyle::All))
+    return false;
+
+  Out = static_cast<DoccamContextSymbolStyle>(*Raw);
+  return true;
+}
+
+bool fromJSON(const llvm::json::Value &Params, DoccamContextParameters &Out,
+              llvm::json::Path P) {
+  llvm::json::ObjectMapper O(Params, P);
+  if (!O)
+    return true; // 'any' type in LSP.
+
+  return O.map("useHtml", Out.UseHtml) &&
+         O.map("preferredSymbolStyle", Out.PreferredSymbolStyle) &&
+         O.map("supportedSymbolStyles", Out.SupportedSymbolStyles);
+}
+// MARK: - C32 End
 
 bool fromJSON(const llvm::json::Value &Params, InitializationOptions &Opts,
               llvm::json::Path P) {
@@ -1384,7 +1413,11 @@ bool fromJSON(const llvm::json::Value &Params, InitializationOptions &Opts,
   return fromJSON(Params, Opts.ConfigSettings, P) &&
          O.map("compilationDatabasePath", Opts.compilationDatabasePath) &&
          mapOptOrNull(Params, "fallbackFlags", Opts.fallbackFlags, P) &&
-         mapOptOrNull(Params, "clangdFileStatus", Opts.FileStatus, P);
+         mapOptOrNull(Params, "clangdFileStatus", Opts.FileStatus, P)
+         // MARK: - C32 Begin
+         && mapOptOrNull(Params, "doccamContextParams",
+                         Opts.DoccamContextParams, P);
+  // MARK: - C32 End
 }
 
 bool fromJSON(const llvm::json::Value &E, TypeHierarchyDirection &Out,

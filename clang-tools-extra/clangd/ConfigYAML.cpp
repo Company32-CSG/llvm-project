@@ -389,6 +389,11 @@ private:
       F.ShowCalleeInfo = boolValue(N, "ShowCalleeInfo");
     });
 
+    Dict.handle("UseWorkspaceFormattingStyle", [&](Node &N) {
+      F.UseWorkspaceFormattingStyle =
+          boolValue(N, "UseWorkspaceFormattingStyle");
+    });
+
     Dict.parse(N);
   }
   // MARK: - C32 End

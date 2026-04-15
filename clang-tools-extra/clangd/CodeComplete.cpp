@@ -75,9 +75,8 @@
 #include <utility>
 // MARK: - C32 Begin
 #include "c32-doccam/DoccamCompletion.hpp"
+#include "c32-doccam/DoccamMarkdown.hpp"
 #include "c32-doccam/DoccamParser.hpp"
-#include "c32-doccam/Markdown.hpp"
-#include "c32-doccam/to_string.hpp"
 // MARK: - C32 End
 
 // We log detailed candidate here if you run with -debug-only=codecomplete.
@@ -213,15 +212,20 @@ MarkupContent renderDoc(const markup::Document &Doc, MarkupKind Kind) {
   return Result;
 }
 // MARK: - C32 Begin
-MarkupContent renderDoc(const c32::markdown::Document &Doc, MarkupKind Kind) {
+MarkupContent renderDoc(const c32::doccam::markdown::Document &Doc,
+                        MarkupKind Kind) {
   MarkupContent Result;
+  const auto &DoccamCtx = c32::doccam::DoccamContext::current();
+  auto DoccamOpts = c32::doccam::markdown::RenderOptions(DoccamCtx);
+
   Result.kind = Kind;
+
   switch (Kind) {
   case MarkupKind::PlainText:
-    Result.value.append(Doc.plaintext());
+    Result.value.append(Doc.plaintext(std::move(DoccamOpts)));
     break;
   case MarkupKind::Markdown:
-    Result.value.append(Doc.markdown());
+    Result.value.append(Doc.markdown(std::move(DoccamOpts)));
     break;
   }
   return Result;
@@ -1215,7 +1219,7 @@ public:
         const auto &Cfg = Config::current();
         if (Cfg.Documentation.CommentFormat ==
             Config::CommentFormatPolicy::Doccam) {
-          c32::markdown::Document C32Doc;
+          c32::doccam::markdown::Document C32Doc;
           c32::doccam::renderDocumentation(IndexDocIt->second, C32Doc);
           SS.Signature.documentation = renderDoc(C32Doc, DocumentationFormat);
         } else {
@@ -1291,7 +1295,7 @@ private:
     std::string FormattedDoc = formatDocumentation(CCS, DocComment);
     if (Cfg.Documentation.CommentFormat ==
         Config::CommentFormatPolicy::Doccam) {
-      c32::markdown::Document C32Doc;
+      c32::doccam::markdown::Document C32Doc;
       c32::doccam::renderDocumentation(FormattedDoc, C32Doc);
       Signature.documentation = renderDoc(C32Doc, DocumentationFormat);
     } else {
@@ -2473,7 +2477,7 @@ CompletionItem CodeCompletion::render(const CodeCompleteOptions &Opts) const {
     if (Cfg.Documentation.CommentFormat ==
             Config::CommentFormatPolicy::Doccam &&
         RawDocumentation) {
-      c32::markdown::Document C32Doc;
+      c32::doccam::markdown::Document C32Doc;
       if (InsertInclude)
         C32Doc.paragraph().text("From ").code(InsertInclude->Header);
       c32::doccam::renderDocumentation(*RawDocumentation, C32Doc);
@@ -2584,7 +2588,7 @@ bool allowImplicitCompletion(llvm::StringRef Content, unsigned Offset) {
                               !llvm::isASCII(Content.back()));
 }
 // MARK: - C32 Begin
-namespace c32 {
+namespace c32::doccam {
 
 CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
                                         const PreambleData *Preamble,
@@ -2608,7 +2612,7 @@ CodeCompleteResult codeCompleteFlowHook(PathRef FileName, size_t Offset,
              : std::move(Flow).run(
                    {FileName, Offset, *Preamble, Patch, ParseInputPatch});
 }
-} // namespace c32
+} // namespace c32::doccam
 // MARK: - C32 End
 } // namespace clangd
 } // namespace clang

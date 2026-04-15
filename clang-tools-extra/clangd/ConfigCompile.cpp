@@ -873,6 +873,12 @@ struct FragmentCompiler {
           [Value(**F.ShowCalleeInfo)](const Params &, Config &C) {
             C.C32.Doccam.Hover.ShowCalleeInfo = Value;
           });
+
+    if (F.UseWorkspaceFormattingStyle)
+      Out.Apply.push_back(
+          [Value(**F.UseWorkspaceFormattingStyle)](const Params &, Config &C) {
+            C.C32.Doccam.Hover.UseWorkspaceFormattingStyle = Value;
+          });
   }
   // MARK: - C32 End
   constexpr static llvm::SourceMgr::DiagKind Error = llvm::SourceMgr::DK_Error;
