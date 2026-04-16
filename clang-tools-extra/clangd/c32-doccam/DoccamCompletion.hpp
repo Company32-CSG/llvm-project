@@ -10,30 +10,31 @@
 
 namespace clang::clangd::c32::doccam {
 
-struct CodeCompleteArgs {
-  /// Name of the file being completed
-  PathRef FileName;
+struct CodeCompleteArgs
+{
+	/// Name of the file being completed
+	PathRef FileName;
 
-  /// Parsing inputs
-  const ParseInputs &ParseInput;
+	/// Parsing inputs
+	const ParseInputs& ParseInput;
 
-  /// Preamble data
-  const PreambleData *Preamble;
+	/// Preamble data
+	const PreambleData* Preamble;
 
-  /// Code completion options
-  CodeCompleteOptions Opts;
+	/// Code completion options
+	CodeCompleteOptions Opts;
 
-  /// Speculative fuzzy find instance
-  SpeculativeFuzzyFind *SpecFuzzyFind;
+	/// Speculative fuzzy find instance
+	SpeculativeFuzzyFind* SpecFuzzyFind;
 
-  /// Contents being parsed
-  std::string_view Contents;
+	/// Contents being parsed
+	std::string_view Contents;
 
-  /// Current cursor offset inside of \m Contents
-  size_t Offset;
+	/// Current cursor offset inside of \m Contents
+	size_t Offset;
 
-  /// Parsed AST for the file being completed
-  const ParsedAST *AST;
+	/// Parsed AST for the file being completed
+	const ParsedAST* AST;
 };
 
 /**
@@ -66,9 +67,8 @@ struct CodeCompleteArgs {
  * 		%CodeCompleteResult struct with completion results.
  */
 std::optional<CodeCompleteResult> maybeCompleteDoccamComment(
-    PathRef FileName, const PreambleData *Preamble,
-    const ParseInputs &ParseInput, CodeCompleteOptions Opts,
-    SpeculativeFuzzyFind *SpecFuzzyFind, StringRef Content, size_t Offset);
+	PathRef FileName, const PreambleData* Preamble, const ParseInputs& ParseInput, CodeCompleteOptions Opts, SpeculativeFuzzyFind* SpecFuzzyFind, StringRef Content, size_t Offset
+);
 
 /**
  * @brief
@@ -110,8 +110,7 @@ bool inDoccamComment(std::string_view Contents, size_t CursorOffset);
  * @retval false
  * 		Doccam completion should not be run.
  */
-bool shouldRunCompletion(std::string_view Contents, size_t CursorOffset,
-                         std::string_view TriggerCharacter);
+bool shouldRunCompletion(std::string_view Contents, size_t CursorOffset, std::string_view TriggerCharacter);
 } // namespace clang::clangd::c32::doccam
 
 #endif

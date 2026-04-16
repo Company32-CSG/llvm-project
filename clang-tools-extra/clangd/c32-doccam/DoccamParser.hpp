@@ -11,93 +11,98 @@ class Document;
 
 namespace clang::clangd::c32::doccam {
 
-struct ParameterTag {
-  enum class Specifier : uint8_t {
-    /// No specifier
-    None = (0),
+struct ParameterTag
+{
+	enum class Specifier : uint8_t
+	{
+		/// No specifier
+		None = (0),
 
-    /// `[in]`
-    In = (1 << 0),
+		/// `[in]`
+		In = (1 << 0),
 
-    /// `[out]`
-    Out = (1 << 1),
+		/// `[out]`
+		Out = (1 << 1),
 
-    /// `[in:opt]`, `[out:optional]`, etc.
-    Optional = (1 << 2)
-  };
+		/// `[in:opt]`, `[out:optional]`, etc.
+		Optional = (1 << 2)
+	};
 
-  /// Parameter name
-  std::string Name;
+	/// Parameter name
+	std::string Name;
 
-  /// Description of the parameter
-  std::string Description;
+	/// Description of the parameter
+	std::string Description;
 
-  /// Data access specifiers (e.g., `[in]`, `[out]`, `[in:opt]`, etc.)
-  Specifier Specifiers;
+	/// Data access specifiers (e.g., `[in]`, `[out]`, `[in:opt]`, etc.)
+	Specifier Specifiers;
 
-  /// Resolved data type, set when a symbol matching this parameter is found for
-  /// \m Name
-  std::optional<std::string> Type;
+	/// Resolved data type, set when a symbol matching this parameter is found for
+	/// \m Name
+	std::optional<std::string> Type;
 
-  /// Resolved underlying data type, set when a symbol matching this parameter
-  /// is found and has an underlying type
-  std::optional<std::string> TypeAKA;
+	/// Resolved underlying data type, set when a symbol matching this parameter
+	/// is found and has an underlying type
+	std::optional<std::string> TypeAKA;
 };
 
-struct CodeExampleTag {
-  /// Name of the opening tag (e.g., "example", "code", etc.) since multiple
-  /// tags map to this struct.
-  std::string Name;
+struct CodeExampleTag
+{
+	/// Name of the opening tag (e.g., "example", "code", etc.) since multiple
+	/// tags map to this struct.
+	std::string Name;
 
-  /// Programming language of the code example
-  std::string Lang;
+	/// Programming language of the code example
+	std::string Lang;
 
-  /// Code content of the example
-  std::string Code;
+	/// Code content of the example
+	std::string Code;
 };
 
-struct CustomTag {
-  /// Name of the custom tag
-  std::string Name;
+struct CustomTag
+{
+	/// Name of the custom tag
+	std::string Name;
 
-  /// Body content of the custom tag
-  std::string Body;
+	/// Body content of the custom tag
+	std::string Body;
 };
 
-struct ParsedDoccam {
-  /// Parsed from `^@brief`
-  std::string Brief;
+struct ParsedDoccam
+{
+	/// Parsed from `^@brief`
+	std::string Brief;
 
-  /// Parsed from `^@warning`
-  std::vector<std::string> Warnings;
+	/// Parsed from `^@warning`
+	std::vector<std::string> Warnings;
 
-  /// Parsed from `^@deprecated`
-  std::string Deprecated;
+	/// Parsed from `^@deprecated`
+	std::string Deprecated;
 
-  std::vector<std::string> UntaggedLines;
+	std::vector<std::string> UntaggedLines;
 
-  std::vector<CustomTag> CustomTags;
+	std::vector<CustomTag> CustomTags;
 
-  /// Parsed from `^@param`
-  std::vector<ParameterTag> Parameters;
+	/// Parsed from `^@param`
+	std::vector<ParameterTag> Parameters;
 
-  /// Parsed from `^@tparam`
-  std::map<std::string, std::string> TParams;
+	/// Parsed from `^@tparam`
+	std::map<std::string, std::string> TParams;
 
-  /// Parsed from `^@returns`
-  std::string Returns;
+	/// Parsed from `^@returns`
+	std::string Returns;
 
-  /// Parsed from `^@retval`
-  std::map<std::string, std::string> Retvals;
+	/// Parsed from `^@retval`
+	std::map<std::string, std::string> Retvals;
 
-  /// Parsed from `^@throw`
-  std::map<std::string, std::string> Throws;
+	/// Parsed from `^@throw`
+	std::map<std::string, std::string> Throws;
 
-  /// Parsed from `^@version`
-  std::pair<std::string, std::string> Version;
+	/// Parsed from `^@version`
+	std::pair<std::string, std::string> Version;
 
-  /// Parsed from `^@example` and `^@code`
-  std::vector<CodeExampleTag> CodeExamples;
+	/// Parsed from `^@example` and `^@code`
+	std::vector<CodeExampleTag> CodeExamples;
 };
 
 /**
@@ -113,7 +118,7 @@ struct ParsedDoccam {
  * @returns
  * 		%ParsedDoccam struct with parsed Doccam comments.
  */
-ParsedDoccam parse(std::string_view Contents, const format::FormatStyle &Style);
+ParsedDoccam parse(std::string_view Contents, const format::FormatStyle& Style);
 
 // MARK: - Specifier Operators
 
@@ -130,10 +135,10 @@ ParsedDoccam parse(std::string_view Contents, const format::FormatStyle &Style);
  * @returns
  * 		Result of the bitwise OR operation.
  */
-inline ParameterTag::Specifier operator|(ParameterTag::Specifier LHS,
-                                         ParameterTag::Specifier RHS) {
-  return static_cast<ParameterTag::Specifier>(static_cast<uint8_t>(LHS) |
-                                              static_cast<uint8_t>(RHS));
+inline ParameterTag::Specifier
+operator|(ParameterTag::Specifier LHS, ParameterTag::Specifier RHS)
+{
+	return static_cast<ParameterTag::Specifier>(static_cast<uint8_t>(LHS) | static_cast<uint8_t>(RHS));
 }
 
 /**
@@ -151,11 +156,12 @@ inline ParameterTag::Specifier operator|(ParameterTag::Specifier LHS,
  * 		Modified left-hand side specifier after the bitwise OR
  * operation.
  */
-inline ParameterTag::Specifier &operator|=(ParameterTag::Specifier &LHS,
-                                           ParameterTag::Specifier RHS) {
-  LHS = RHS | LHS;
+inline ParameterTag::Specifier&
+operator|=(ParameterTag::Specifier& LHS, ParameterTag::Specifier RHS)
+{
+	LHS = RHS | LHS;
 
-  return LHS;
+	return LHS;
 }
 
 /**
@@ -171,17 +177,16 @@ inline ParameterTag::Specifier &operator|=(ParameterTag::Specifier &LHS,
  * @returns
  * 		Result of the bitwise AND operation.
  */
-inline ParameterTag::Specifier operator&(ParameterTag::Specifier LHS,
-                                         ParameterTag::Specifier RHS) {
-  return static_cast<ParameterTag::Specifier>(static_cast<uint8_t>(LHS) &
-                                              static_cast<uint8_t>(RHS));
+inline ParameterTag::Specifier
+operator&(ParameterTag::Specifier LHS, ParameterTag::Specifier RHS)
+{
+	return static_cast<ParameterTag::Specifier>(static_cast<uint8_t>(LHS) & static_cast<uint8_t>(RHS));
 }
 
 /// Render a raw documentation string through the c32 doccam parser into a
 /// c32::doccam::markdown::Document suitable for code completion and signature
 /// help.
-void renderDocumentation(std::string_view Raw,
-                         c32::doccam::markdown::Document &Out);
+void renderDocumentation(std::string_view Raw, c32::doccam::markdown::Document& Out);
 
 } // namespace clang::clangd::c32::doccam
 

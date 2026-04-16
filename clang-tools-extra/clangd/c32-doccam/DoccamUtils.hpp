@@ -22,8 +22,7 @@ namespace clang::clangd::c32::doccam {
  * @returns
  * 		Formatted code, or the original code if formatting failed.
  */
-std::string formatCode(const format::FormatStyle &Style,
-                       std::string_view Input);
+std::string formatCode(const format::FormatStyle& Style, std::string_view Input);
 
 /**
  * @brief
@@ -57,8 +56,7 @@ std::string escapeHtml(std::string_view Input);
  * @retval false
  * 		\p Contents doesn't start with \p Prefix
  */
-bool lineStartsWith(std::string_view Contents, size_t CursorOffset,
-                    std::string_view Prefix);
+bool lineStartsWith(std::string_view Contents, size_t CursorOffset, std::string_view Prefix);
 
 /**
  * @brief
@@ -75,8 +73,7 @@ bool lineStartsWith(std::string_view Contents, size_t CursorOffset,
  * 		Pair containing the position where the new line was found and
  * the content extracted from \p Contents backward to the newline.
  */
-std::pair<size_t, std::string_view> extractLine(std::string_view Contents,
-                                                size_t Offset);
+std::pair<size_t, std::string_view> extractLine(std::string_view Contents, size_t Offset);
 
 /**
  * @brief
@@ -103,8 +100,7 @@ std::string indentLines(std::string_view Input);
  * @returns
  * 		String with canonicalized whitespace.
  */
-std::string canonicalizeWhitespace(std::string_view Contents,
-                                   bool PreserveNewlines = false);
+std::string canonicalizeWhitespace(std::string_view Contents, bool PreserveNewlines = false);
 
 /**
  * @brief
@@ -174,8 +170,7 @@ std::string trim(std::string_view Contents);
  * 		Vector of strings resulting from splitting \p Contents by \p
  * Splitter.
  */
-std::vector<std::string> split(std::string_view Contents,
-                               std::string_view Splitter);
+std::vector<std::string> split(std::string_view Contents, std::string_view Splitter);
 
 /**
  * @brief

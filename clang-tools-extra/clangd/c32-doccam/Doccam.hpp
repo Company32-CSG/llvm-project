@@ -8,112 +8,115 @@
 
 namespace clang::clangd::c32::doccam {
 
-enum class TagType {
-  /// Concrete type for `^@a`
-  A,
+enum class TagType
+{
+	/// Concrete type for `^@a`
+	A,
 
-  /// Concrete type for `^@b`
-  B,
+	/// Concrete type for `^@b`
+	B,
 
-  /// Concrete type for `^@brief`
-  Brief,
+	/// Concrete type for `^@brief`
+	Brief,
 
-  /// Concrete type for `^@c`
-  C,
+	/// Concrete type for `^@c`
+	C,
 
-  /// Concrete type for `^@code` ... `^@end`
-  Code,
+	/// Concrete type for `^@code` ... `^@end`
+	Code,
 
-  /// Concrete type for `^@end`
-  End,
+	/// Concrete type for `^@end`
+	End,
 
-  /// Concrete type for `^@deprecated`
-  Deprecated,
+	/// Concrete type for `^@deprecated`
+	Deprecated,
 
-  /// Concrete type for `^@example`, `^@usage`
-  Example,
+	/// Concrete type for `^@example`, `^@usage`
+	Example,
 
-  /// Concrete type for `^@member`, `^@m`
-  Member,
+	/// Concrete type for `^@member`, `^@m`
+	Member,
 
-  /// Concrete type for `^@p`
-  P,
+	/// Concrete type for `^@p`
+	P,
 
-  /// Concrete type for `^@param`
-  Param,
+	/// Concrete type for `^@param`
+	Param,
 
-  /// Concrete type for `^@ref`
-  Ref,
+	/// Concrete type for `^@ref`
+	Ref,
 
-  /// Concrete type for `^@returns`, `^@return`
-  Returns,
+	/// Concrete type for `^@returns`, `^@return`
+	Returns,
 
-  /// Concrete type for `^@retval`, `^@ret`
-  Retval,
+	/// Concrete type for `^@retval`, `^@ret`
+	Retval,
 
-  /// Concrete type for `^@throw`, `^@throws`
-  Throw,
+	/// Concrete type for `^@throw`, `^@throws`
+	Throw,
 
-  /// Concrete type for `^@tparam`
-  TParam,
+	/// Concrete type for `^@tparam`
+	TParam,
 
-  /// Concrete type for `^@version`
-  Version,
+	/// Concrete type for `^@version`
+	Version,
 
-  /// Concrete type for `^@warning`, `^@warn`
-  Warning,
+	/// Concrete type for `^@warning`, `^@warn`
+	Warning,
 
-  /// Generic doccam tag with no special handling
-  Custom
+	/// Generic doccam tag with no special handling
+	Custom
 };
 
-enum class TagContext {
-  /// Any type of tag
-  Any,
+enum class TagContext
+{
+	/// Any type of tag
+	Any,
 
-  /// Block tags only
-  Block,
+	/// Block tags only
+	Block,
 
-  /// Inline tags only
-  Inline
+	/// Inline tags only
+	Inline
 };
 
-struct TagParsingFlags {
-  /// Denotes whether the tag is meant to be parsed inline rather than its own
-  /// section.
-  bool Inline : 1U;
+struct TagParsingFlags
+{
+	/// Denotes whether the tag is meant to be parsed inline rather than its own
+	/// section.
+	bool Inline : 1U;
 
-  /// The parser will continue to consume when line breaks (blank lines) are
-  /// encountered.
-  bool AllowLineBreaks : 1U;
+	/// The parser will continue to consume when line breaks (blank lines) are
+	/// encountered.
+	bool AllowLineBreaks : 1U;
 
-  /// Indicates the parser should consume the following (terminating) tag too.
-  bool HasTerminatingTag : 1U;
+	/// Indicates the parser should consume the following (terminating) tag too.
+	bool HasTerminatingTag : 1U;
 
-  TagParsingFlags(bool Inline = false, bool AllowLineBreaks = false,
-                  bool HasTerminatingTag = false)
-      : Inline(Inline), AllowLineBreaks(AllowLineBreaks),
-        HasTerminatingTag(HasTerminatingTag) {}
+	TagParsingFlags(bool Inline = false, bool AllowLineBreaks = false, bool HasTerminatingTag = false)
+		: Inline(Inline), AllowLineBreaks(AllowLineBreaks),
+		  HasTerminatingTag(HasTerminatingTag) {}
 };
 
-struct DoccamTag {
-  /// Concrete \r TagType identifier for this tag
-  TagType Type;
+struct DoccamTag
+{
+	/// Concrete \r TagType identifier for this tag
+	TagType Type;
 
-  /// How to parse this tag
-  TagParsingFlags Flags;
+	/// How to parse this tag
+	TagParsingFlags Flags;
 
-  /// `brief`, `example`, `param`, etc.
-  std::string_view Name;
+	/// `brief`, `example`, `param`, etc.
+	std::string_view Name;
 
-  /// For completion documentation.
-  std::string_view Description;
+	/// For completion documentation.
+	std::string_view Description;
 
-  /// Other names for this tag. (e.g., `^@ret` -> `^@retval`)
-  std::vector<std::string_view> Aliases;
+	/// Other names for this tag. (e.g., `^@ret` -> `^@retval`)
+	std::vector<std::string_view> Aliases;
 
-  /// Tag attributes put in the `[]` such as `^@param[in]`, `^@example[c]`, etc.
-  std::vector<std::string_view> Attributes;
+	/// Tag attributes put in the `[]` such as `^@param[in]`, `^@example[c]`, etc.
+	std::vector<std::string_view> Attributes;
 };
 
 /**
@@ -156,7 +159,7 @@ const llvm::ArrayRef<char> getAllTagInitiators();
  * @returns
  * 		Pointer to the \r DoccamTag that matches \p Type, or nullptr
  */
-const DoccamTag *getTagByType(TagType Type);
+const DoccamTag* getTagByType(TagType Type);
 
 /**
  * @brief
@@ -223,7 +226,7 @@ bool isDoccamTagInitiator(char C);
  * @returns
  * 		Pointer to the \r DoccamTag that matches \p Name, or nullptr
  */
-const DoccamTag *getDoccamTagByName(std::string_view Name);
+const DoccamTag* getDoccamTagByName(std::string_view Name);
 
 /**
  * @brief
@@ -318,18 +321,19 @@ std::string unescape(std::string_view SV);
  */
 bool tagStartsLine(std::string_view SV, size_t Pos);
 
-struct MatchedTag {
-  /// Tag initiator type that was found
-  char INI;
+struct MatchedTag
+{
+	/// Tag initiator type that was found
+	char INI;
 
-  /// Tag name that was matched to
-  std::string Name;
+	/// Tag name that was matched to
+	std::string Name;
 
-  /// Number of bytes consumed of the string that was passed in
-  size_t Consumed;
+	/// Number of bytes consumed of the string that was passed in
+	size_t Consumed;
 
-  /// Reference to the tag that was found
-  const DoccamTag *Tag;
+	/// Reference to the tag that was found
+	const DoccamTag* Tag;
 };
 
 /**
@@ -349,8 +353,7 @@ struct MatchedTag {
  * 		\r MatchedTag struct if a tag was found, or %std::nullopt if no
  * tag was found.
  */
-std::optional<MatchedTag> getTag(std::string_view SV, size_t Pos,
-                                 TagContext Context);
+std::optional<MatchedTag> getTag(std::string_view SV, size_t Pos, TagContext Context);
 
 /**
  * @brief

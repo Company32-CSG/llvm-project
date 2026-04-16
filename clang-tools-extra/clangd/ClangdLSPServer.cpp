@@ -576,6 +576,24 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
     Opts.ModulesManager = &*ModulesManager;
   }
 
+  // MARK: - C32 Begin
+  if (Params.initializationOptions.DoccamContextParams) {
+    c32::doccam::DoccamContext DoccamCtx(
+        *Params.initializationOptions.DoccamContextParams);
+
+    BackgroundContext = BackgroundContext.derive(
+        c32::doccam::DoccamContext::ContextKey, DoccamCtx);
+
+    auto BaseProvider = Opts.ContextProvider;
+    Opts.ContextProvider = [BaseProvider, DoccamCtx](PathRef File) -> Context {
+      Context C =
+          BaseProvider ? BaseProvider(File) : Context::current().clone();
+      return std::move(C).derive(c32::doccam::DoccamContext::ContextKey,
+                                 DoccamCtx);
+    };
+  }
+  // MARK: - C32 End
+
   {
     // Switch caller's context with LSPServer's background context. Since we
     // rather want to propagate information from LSPServer's context into the
@@ -584,14 +602,6 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
     std::optional<WithContextValue> WithOffsetEncoding;
     if (Opts.Encoding)
       WithOffsetEncoding.emplace(kCurrentOffsetEncoding, *Opts.Encoding);
-    // MARK: - C32 Begin
-    std::optional<WithContextValue> WithDoccamContext;
-    if (Params.initializationOptions.DoccamContextParams)
-      WithDoccamContext.emplace(
-          c32::doccam::DoccamContext::ContextKey,
-          c32::doccam::DoccamContext(
-              *Params.initializationOptions.DoccamContextParams));
-    // MARK: - C32 End
     Server.emplace(*CDB, TFS, Opts,
                    static_cast<ClangdServer::Callbacks *>(this));
   }

@@ -16,12 +16,14 @@
 #include <optional>
 #include <string>
 #include <vector>
-// MARK: - C32 Begin
-#include "c32-doccam/DoccamMarkdown.hpp"
-// MARK: - C32 End
 
 namespace clang {
 namespace clangd {
+// MARK: - C32 Begin
+namespace c32::doccam::markdown {
+class Document;
+} // namespace c32::doccam::markdown
+// MARK: - C32 End
 
 /// Contains detailed information about a Symbol. Especially useful when
 /// generating hover responses. It can be rendered as a hover panel, or
@@ -127,7 +129,7 @@ struct HoverInfo {
   std::vector<std::string> UsedSymbolNames;
 
   // MARK: - C32 Begin
-  struct EnhancedInfo {
+  struct EnhancedHoverInfo {
     struct UsedSymbol {
       index::SymbolKind Kind;
       std::string Name;
@@ -168,7 +170,16 @@ struct HoverInfo {
       std::string Expr;
     };
 
+    enum class LiteralKind {
+      String,
+      Numeric,
+    };
+
     format::FormatStyle Style;
+
+    /// Type of literal (e.g., `1`, `"foo"`).
+    /// Usable when `Kind` is `SymbolKind::Unknown`.
+    std::optional<LiteralKind> LiteralValueKind = std::nullopt;
 
     /// Underlying symbol kind for type aliases.
     /// Usable when `Kind` is `SymbolKind::TypeAlias`.
@@ -196,17 +207,8 @@ struct HoverInfo {
     /// directives.
     /// Usable when `Kind` is `SymbolKind::IncludeDirective`.
     std::vector<UsedSymbol> ProvidedSymbols;
-
-    inline index::SymbolKind concreteKind(index::SymbolKind ForKind) const {
-      if (index::SymbolKind::TypeAlias == ForKind) {
-        if (auto Underlying = UnderlyingKind)
-          return *Underlying;
-      }
-
-      return ForKind;
-    }
   };
-  EnhancedInfo EnhancedInfo;
+  EnhancedHoverInfo EnhancedInfo;
   // MARK: - C32 End
 
   /// Produce a user-readable information based on the specified markup kind.

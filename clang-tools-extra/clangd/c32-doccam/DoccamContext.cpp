@@ -6,13 +6,15 @@ namespace clang::clangd::c32::doccam {
 
 clangd::Key<DoccamContext> DoccamContext::ContextKey;
 
-const DoccamContext &DoccamContext::current() {
-  if (const DoccamContext *C = Context::current().get(ContextKey))
-    return *C;
+const DoccamContext&
+DoccamContext::current()
+{
+	if (const DoccamContext* C = Context::current().get(ContextKey))
+		return *C;
 
-  static const DoccamContext Default;
+	static const DoccamContext Default;
 
-  return Default;
+	return Default;
 }
 
 } // namespace clang::clangd::c32::doccam

@@ -67,6 +67,7 @@
 
 // MARK: - C32 Begin
 #include "c32-doccam/DoccamContext.hpp"
+#include "c32-doccam/DoccamMarkdown.hpp"
 #include "c32-doccam/DoccamUtils.hpp"
 
 namespace clang::clangd::c32::doccam {
@@ -733,7 +734,7 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
       HI.EnhancedInfo.EnumMembers.emplace();
 
       for (auto *ECD : ED->enumerators()) {
-        HoverInfo::EnhancedInfo::EnumMember Member;
+        HoverInfo::EnhancedHoverInfo::EnumMember Member;
 
         if (const auto *Init = ECD->getInitExpr()) {
           auto &AST = ECD->getASTContext();
@@ -756,7 +757,7 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
     HI.EnhancedInfo.EnumMembers.emplace();
 
     for (auto *ECD : ED->enumerators()) {
-      HoverInfo::EnhancedInfo::EnumMember Member;
+      HoverInfo::EnhancedHoverInfo::EnumMember Member;
 
       if (const auto *Init = ECD->getInitExpr()) {
         auto &AST = ECD->getASTContext();
@@ -1054,6 +1055,11 @@ std::optional<HoverInfo> getHoverContents(const SelectionTree::Node *N,
   if (const StringLiteral *SL = dyn_cast<StringLiteral>(E)) {
     // Print the type and the size for string literals
     HI = getStringLiteralContents(SL, PP);
+    // MARK: - C32 Begin
+    if (HI)
+      HI->EnhancedInfo.LiteralValueKind =
+          HoverInfo::EnhancedHoverInfo::LiteralKind::String;
+    // MARK: - C32 End
   } else if (isLiteral(E)) {
     // There's not much value in hovering over "42" and getting a hover card
     // saying "42 is an int", similar for most other literals.
@@ -1066,12 +1072,14 @@ std::optional<HoverInfo> getHoverContents(const SelectionTree::Node *N,
       // MARK: - C32 Begin
       // HI->Name = "literal";
       if (auto Val = printExprValue(E, AST.getASTContext())) {
-        /* e.g., "42", "hello", "0x2A", etc. */
+        /* e.g., "42", "0x2A", etc. */
         HI->Name = *Val;
       } else {
         /* Fallback */
         HI->Name = "literal";
       }
+      HI->EnhancedInfo.LiteralValueKind =
+          HoverInfo::EnhancedHoverInfo::LiteralKind::Numeric;
       // MARK: - C32 End
       return HI;
     }
@@ -1886,11 +1894,12 @@ std::string HoverInfo::present(MarkupKind Kind) const {
       // the plain text output.
       return presentDefault().asEscapedMarkdown();
     // MARK: - C32 Begin
-    const auto &DoccamCtx = c32::doccam::DoccamContext::current();
-    auto DoccamOpts = c32::doccam::markdown::RenderOptions(DoccamCtx);
-
-    if (Cfg.Documentation.CommentFormat == Config::CommentFormatPolicy::Doccam)
+    if (Cfg.Documentation.CommentFormat ==
+        Config::CommentFormatPolicy::Doccam) {
+      const auto &DoccamCtx = c32::doccam::DoccamContext::current();
+      auto DoccamOpts = c32::doccam::markdown::RenderOptions(DoccamCtx);
       return presentDoccam().markdown(DoccamOpts);
+    }
     // MARK: - C32 End
   }
 
@@ -2009,7 +2018,7 @@ static void maybeAddProvidedSymbols(ParsedAST &AST, HoverInfo &HI,
       });
 
   for (const auto &UsedSym : UsedSymbols) {
-    HoverInfo::EnhancedInfo::UsedSymbol Sym;
+    HoverInfo::EnhancedHoverInfo::UsedSymbol Sym;
 
     auto &Decl = UsedSym.declaration();
     auto DeclSymInfo = index::getSymbolInfo(&Decl);
